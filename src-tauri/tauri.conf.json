@@ -49,7 +49,8 @@
       {
         "title": "Splicedd",
         "width": 1200,
-        "height": 600
+        "height": 600,
+        "additionalBrowserArgs": "--disable-web-security"
       }
     ],
     "security": {

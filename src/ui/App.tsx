@@ -4,10 +4,8 @@ import { Button } from "@nextui-org/button";
 import { SearchIcon, ChevronDownIcon } from '@nextui-org/shared-icons'
 import { WrenchIcon } from "@heroicons/react/20/solid";
 import { CircularProgress, Input, Modal, Pagination, Popover, PopoverContent, PopoverTrigger, Radio, RadioGroup, Select, SelectItem, useDisclosure } from "@nextui-org/react";
-import { fetch } from '@tauri-apps/api/http';
-
 import { cfg } from "../config";
-import { GRAPHQL_URL, SpliceSample, SpliceSearchResponse, createSearchRequest } from "../splice/api";
+import { SpliceSample, SpliceSearchResponse, createSearchRequest } from "../splice/api";
 import { ChordType, MusicKey, SpliceSampleType, SpliceSortBy, SpliceTag } from "../splice/entities";
 
 import SampleListEntry from "./components/SampleListEntry";
@@ -142,19 +140,18 @@ function App() {
 
       setSearchLoading(true);
 
-      const resp = await fetch<SpliceSearchResponse>(GRAPHQL_URL, {
+      const resp = await window.fetch("https://surfaces-graphql.splice.com/graphql", {
         method: "POST",
-        body: {
-          type: "Json",
-          payload
-        }
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
 
       setSearchLoading(false);
 
       pbCtx.cancellation?.(); // stop any sample that's currently playing
 
-      const data = resp.data.data.assetsSearch;
+      const respData: SpliceSearchResponse = await resp.json();
+      const data = respData.data.assetsSearch;
 
       setResults(data.items);
       setResultCount(data.response_metadata.records);

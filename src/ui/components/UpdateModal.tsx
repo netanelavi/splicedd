@@ -4,7 +4,7 @@ import { ArrowDownToLine } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-shell";
 
-import { ReleaseNotes, UpdateInfo, disableUpdateChecks, installUpdate, skipUpdate } from "../../updater";
+import { ReleaseNotes, UpdateInfo, disableUpdateChecks, installUpdate, opensReleasePage, skipUpdate } from "../../updater";
 
 /**
  * A dialog shown on startup when a newer release of Splicedd is available.
@@ -29,19 +29,25 @@ export default function UpdateModal({ update, onDismiss }: {
   }, []);
 
   async function handleUpdate() {
-    setDownloading(true);
     setError(null);
 
+    // On platforms without in-app install, updating just opens the release page
+    // in the browser -- there's no download, so skip the "Downloading..." state
+    // and dismiss the dialog once the page is open.
+    if (opensReleasePage(update)) {
+      try {
+        await installUpdate(update);
+        onDismiss();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
+
+    setDownloading(true);
     try {
       // If this succeeds, the installer is running and the app is about to exit.
       await installUpdate(update);
-
-      // When there's no installer for this platform, `installUpdate` just opens
-      // the release page in the browser and returns without exiting the app.
-      // Dismiss the (otherwise un-closable) dialog instead of leaving it stuck
-      // showing "Downloading...".
-      if (update.installerUrl == null)
-        onDismiss();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setDownloading(false);
@@ -85,9 +91,9 @@ export default function UpdateModal({ update, onDismiss }: {
                 <Changelog releases={update.changelog} />
               }
 
-              { update.installerUrl == null &&
+              { opensReleasePage(update) &&
                 <p className="text-sm text-muted">
-                  No installer for this platform was found in the release, so updating opens the release page in your browser.
+                  Splicedd can't install this update automatically on your platform, so updating opens the release page in your browser to download and install manually.
                 </p>
               }
 
@@ -107,11 +113,13 @@ export default function UpdateModal({ update, onDismiss }: {
                   Later
                 </Button>
                 <Button variant="primary" isDisabled={downloading} onClick={handleUpdate}>
-                  { downloading
-                    ? progress != null
-                      ? `Downloading... ${Math.round(progress * 100)}%`
-                      : "Downloading..."
-                    : "Update now" }
+                  { opensReleasePage(update)
+                    ? "Open release page"
+                    : downloading
+                      ? progress != null
+                        ? `Downloading... ${Math.round(progress * 100)}%`
+                        : "Downloading..."
+                      : "Update now" }
                 </Button>
               </div>
 

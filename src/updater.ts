@@ -147,19 +147,37 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
   };
 }
 
+function isWindows() {
+  return navigator.userAgent.includes("Windows");
+}
+
 /**
- * Downloads and launches the installer for the given update, terminating
- * Splicedd if successful. If no installer is available for this platform,
- * opens the release page in the browser instead.
+ * Whether "updating" will open the release page in the browser rather than
+ * install in-app. Only Windows can install in place -- its NSIS/MSI installers
+ * actually run an install when launched. On macOS the downloaded `.dmg` would
+ * merely mount in Finder, and on Linux a freshly downloaded `.AppImage`/`.deb`
+ * can't be launched into an install -- so on those platforms (and whenever the
+ * release has no installer asset for this platform) we send the user to the
+ * release page to download and install manually.
+ */
+export function opensReleasePage(update: UpdateInfo) {
+  return update.installerUrl == null || !isWindows();
+}
+
+/**
+ * Installs the given update. On Windows this downloads the installer and
+ * launches it, terminating Splicedd so it can be replaced. On every other
+ * platform (see `opensReleasePage`) it opens the release page in the browser.
  */
 // /src-tauri/src/updater.rs
 export async function installUpdate(update: UpdateInfo) {
-  if (update.installerUrl == null) {
+  const url = update.installerUrl;
+  if (url == null || !isWindows()) {
     await open(update.releaseUrl);
     return;
   }
 
-  await invoke("install_update", { url: update.installerUrl });
+  await invoke("install_update", { url });
 }
 
 /**

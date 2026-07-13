@@ -1,0 +1,164 @@
+name: Release
+
+# Releases are cut by "milestone" commits on master. Push a commit whose
+# message starts with `milestone:` and matches the version in package.json,
+# e.g. `milestone: Splicedd v2.0.0`, and this workflow builds every platform,
+# attaches GitHub build-provenance attestations, and opens a *draft* release
+# for you to write the changelog and publish manually.
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Cheap guard: every push to master runs this, but only milestone commits
+  # proceed to the (expensive) build + publish jobs below.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.check.outputs.release }}
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need tags to detect an already-released version
+      - id: check
+        shell: bash
+        run: |
+          MSG="$(git log -1 --pretty=%s)"
+          echo "Head commit: $MSG"
+
+          # 1. Only milestone commits trigger a release.
+          if [[ "$MSG" != milestone:* ]]; then
+            echo "Not a milestone commit — skipping release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 2. package.json is the source of truth for the version.
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="v$VERSION"
+
+          # 3. Cross-check the version in the message matches package.json.
+          MSG_VER="$(printf '%s' "$MSG" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          if [[ "$MSG_VER" != "$VERSION" ]]; then
+            echo "::error::Commit says '$MSG_VER' but package.json is '$VERSION'. Fix one."
+            exit 1
+          fi
+
+          # 4. Refuse to re-release: the tag must not already exist (= you bumped).
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists — did you forget to bump the version?"
+            exit 1
+          fi
+
+          echo "Releasing $TAG"
+          echo "release=true"     >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: gate
+    if: needs.gate.outputs.release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: windows-x64
+            platform: windows-latest
+            args: ""
+          - id: macos-arm64
+            platform: macos-latest
+            args: "--target aarch64-apple-darwin"
+          - id: macos-x64
+            platform: macos-13
+            args: "--target x86_64-apple-darwin"
+          - id: linux-x64
+            platform: ubuntu-22.04
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ contains(matrix.id, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf
+      - run: yarn install --frozen-lockfile
+      # No tagName => tauri-action only builds; the publish job owns the release.
+      - uses: tauri-apps/tauri-action@v0
+        with:
+          args: ${{ matrix.args }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.id }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/**
+            src-tauri/target/*/release/bundle/**
+
+  publish:
+    needs: [gate, build]
+    if: needs.gate.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release + tag
+      id-token: write # OIDC identity used to sign the attestation
+      attestations: write # record the build-provenance attestation
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: staging
+
+      # Custom filenames. NOTE: the suffixes -setup.exe/.msi/.dmg/.AppImage/.deb
+      # are required — the in-app updater (src/updater.ts, pickInstaller) matches
+      # assets by suffix. Change the names freely but keep the endings intact.
+      - name: Collect & rename installers
+        shell: bash
+        run: |
+          mkdir release
+          VERSION="${{ needs.gate.outputs.version }}"
+          collect() { # $1 = source glob, $2 = destination filename
+            for f in $1; do
+              if [ -e "$f" ]; then cp "$f" "release/$2"; return; fi
+            done
+            echo "::warning::no file matched: $1"
+          }
+          shopt -s globstar nullglob
+          collect "staging/**/nsis/*-setup.exe"       "Splicedd-$VERSION-windows-x64-setup.exe"
+          collect "staging/**/aarch64*/**/*.dmg"       "Splicedd-$VERSION-macos-arm64.dmg"
+          collect "staging/**/x86_64-apple*/**/*.dmg"  "Splicedd-$VERSION-macos-x64.dmg"
+          collect "staging/**/appimage/*.AppImage"     "Splicedd-$VERSION-linux-x86_64.AppImage"
+          collect "staging/**/deb/*.deb"               "Splicedd-$VERSION-linux-x86_64.deb"
+          echo "Assets to publish:"
+          ls -la release
+
+      # Cryptographic proof these files were built by this workflow in this repo.
+      # Verify with: gh attestation verify <file> --repo ascpixi/splicedd
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "release/*"
+
+      - name: Publish draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.gate.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Splicedd ${{ needs.gate.outputs.tag }}
+          draft: true # write the changelog in the UI, then publish
+          generate_release_notes: true # pre-fills an editable PR list
+          files: release/*
+          fail_on_unmatched_files: true

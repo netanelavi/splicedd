@@ -10,6 +10,7 @@ import { checkFileExists, createPlaceholder, writeSampleFile } from "../../nativ
 import { join } from "@tauri-apps/api/path";
 
 import { cfg } from "../../config";
+import { DRAG_PREVIEW_ICON } from "../../dragIcon";
 import { SamplePlaybackContext } from "../playback";
 import { SpliceTag } from "../../splice/entities";
 import { SpliceSample, SpliceSamplePack } from "../../splice/api";
@@ -173,7 +174,7 @@ export default function SampleListEntry(
 
     const dragParams = {
       item: [await join(cfg().sampleDir, samplePath)],
-      icon: ""
+      icon: DRAG_PREVIEW_ICON
     };
 
     setFgLoading(true);

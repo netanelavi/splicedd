@@ -74,9 +74,6 @@ jobs:
           - id: macos-arm64
             platform: macos-latest
             args: "--target aarch64-apple-darwin"
-          - id: macos-x64
-            platform: macos-13
-            args: "--target x86_64-apple-darwin"
           - id: linux-x64
             platform: ubuntu-22.04
             args: ""
@@ -89,7 +86,7 @@ jobs:
           cache: yarn
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ contains(matrix.id, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ contains(matrix.id, 'macos') && 'aarch64-apple-darwin' || '' }}
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -142,7 +139,6 @@ jobs:
           shopt -s globstar nullglob
           collect "staging/bundles-windows-x64/**/*-setup.exe"  "Splicedd-$VERSION-windows-x64-setup.exe"
           collect "staging/bundles-macos-arm64/**/*.dmg"        "Splicedd-$VERSION-macos-arm64.dmg"
-          collect "staging/bundles-macos-x64/**/*.dmg"          "Splicedd-$VERSION-macos-x64.dmg"
           collect "staging/bundles-linux-x64/**/*.AppImage"     "Splicedd-$VERSION-linux-x86_64.AppImage"
           collect "staging/bundles-linux-x64/**/*.deb"          "Splicedd-$VERSION-linux-x86_64.deb"
           echo "Assets to publish:"

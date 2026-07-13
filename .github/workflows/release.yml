@@ -94,8 +94,8 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
-            librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget \
+            file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - run: yarn install --frozen-lockfile
       # No tagName => tauri-action only builds; the publish job owns the release.
       - uses: tauri-apps/tauri-action@v0
@@ -134,14 +134,17 @@ jobs:
             for f in $1; do
               if [ -e "$f" ]; then cp "$f" "release/$2"; return; fi
             done
-            echo "::warning::no file matched: $1"
+            echo "::error::no file matched: $1"
+            exit 1
           }
+          # Anchor on the per-job artifact dirs (bundles-<matrix.id>); upload-artifact
+          # strips the target-triple prefix, so match by extension, not inner dirs.
           shopt -s globstar nullglob
-          collect "staging/**/nsis/*-setup.exe"       "Splicedd-$VERSION-windows-x64-setup.exe"
-          collect "staging/**/aarch64*/**/*.dmg"       "Splicedd-$VERSION-macos-arm64.dmg"
-          collect "staging/**/x86_64-apple*/**/*.dmg"  "Splicedd-$VERSION-macos-x64.dmg"
-          collect "staging/**/appimage/*.AppImage"     "Splicedd-$VERSION-linux-x86_64.AppImage"
-          collect "staging/**/deb/*.deb"               "Splicedd-$VERSION-linux-x86_64.deb"
+          collect "staging/bundles-windows-x64/**/*-setup.exe"  "Splicedd-$VERSION-windows-x64-setup.exe"
+          collect "staging/bundles-macos-arm64/**/*.dmg"        "Splicedd-$VERSION-macos-arm64.dmg"
+          collect "staging/bundles-macos-x64/**/*.dmg"          "Splicedd-$VERSION-macos-x64.dmg"
+          collect "staging/bundles-linux-x64/**/*.AppImage"     "Splicedd-$VERSION-linux-x86_64.AppImage"
+          collect "staging/bundles-linux-x64/**/*.deb"          "Splicedd-$VERSION-linux-x86_64.deb"
           echo "Assets to publish:"
           ls -la release
 

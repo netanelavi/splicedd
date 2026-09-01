@@ -50,11 +50,16 @@ export class RowList {
     }
   }
 
-  /** Whether the listing on screen is already the given one. */
-  shows(samples: readonly SpliceSample[]) {
+  /**
+   * Whether the listing on screen is already this one, drawn by Splicedd. A
+   * page Splice served happens to hold the same samples, but not the behaviour
+   * that goes with them, so it is still replaced.
+   */
+  owns(samples: readonly SpliceSample[]) {
     const drawn = rows();
 
     return drawn.length == samples.length && drawn.every((row, index) =>
+      row.hasAttribute(ROW_MARK) &&
       row.querySelector(hook(QA.filename))?.textContent?.trim() == fileOf(samples[index].name));
   }
 

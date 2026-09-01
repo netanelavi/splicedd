@@ -330,9 +330,8 @@ button, input, select, textarea {
 /* --- toasts --- */
 
 /*
-  Toasts and the floating "playing on Splice" card share one column pinned to
-  the corner of the viewport, so neither can cover the other and both are there
-  whether the panel is open or not.
+  Pinned to the corner of the viewport rather than to the panel: most of the
+  work happens with the panel closed, and a toast about it still has to show.
 */
 .sd-dock {
   position: fixed;
@@ -389,49 +388,6 @@ button, input, select, textarea {
 
 @keyframes sd-spin {
   to { transform: rotate(360deg); }
-}
-
-.sd-now[data-busy="true"] {
-  cursor: progress;
-}
-
-.sd-now[data-variant="floating"] {
-  border: 1px solid var(--sd-border);
-  border-radius: var(--sd-radius);
-  box-shadow: var(--sd-shadow);
-  animation: sd-toast-in 0.16s ease;
-}
-
-.sd-now-text {
-  min-width: 0;
-}
-
-.sd-now-text strong {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 500;
-  color: var(--sd-text);
-}
-
-.sd-now-text small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-}
-
-.sd-now-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--sd-accent);
 }
 
 .sd-folder {

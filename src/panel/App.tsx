@@ -16,7 +16,6 @@ import { useSampleActions } from "./hooks/useSampleActions";
 import { entryOf, useSpliceSite } from "./hooks/useSpliceSite";
 import { useToasts } from "./hooks/useToasts";
 import { useSettings } from "./useSettings";
-import NowPlaying from "./components/NowPlaying";
 import ToastStack from "./components/ToastStack";
 import Panel from "./Panel";
 
@@ -80,6 +79,13 @@ export default function App({ host }: { host: HTMLElement }) {
 
   const listing = useMemo(() => new RowList(fetchJson), []);
 
+  /**
+   * Whether anything has been drawn yet in this document. Arriving on a page is
+   * not turning one, so the first drawing leaves the scroll alone; every one
+   * after it followed a click on the paginator.
+   */
+  const drawn = useRef(false);
+
   // How far the listing runs, and what is on the page being asked for: neither
   // is anything the page itself can say, and asking Splice's server for a page
   // past the first returns the first, so Splicedd draws it from the answer.
@@ -94,12 +100,22 @@ export default function App({ host }: { host: HTMLElement }) {
 
         injector.refresh({ page: result.currentPage, totalPages: result.totalPages });
 
-        if (asksBeyondTheFirstPage() && !listing.shows(result.items)) {
+        // Every page is drawn here, the first one included. A page Splice
+        // served holds the same samples but not the behaviour that goes with
+        // them -- its menus, its player and its waveforms are its own -- and a
+        // listing that changes hands halfway down is a listing that behaves
+        // two different ways.
+        if (!listing.owns(result.items)) {
           listing.show(result.items);
 
-          // A page turned from the paginator at the foot of a very long list
-          // would otherwise leave the reader at the foot of it.
-          showListTop();
+          // Turning a page from the paginator at the foot of a very long list
+          // would otherwise leave the reader at the foot of it. Arriving is
+          // not turning, so the first drawing of a listing leaves it alone.
+          if (drawn.current) {
+            showListTop();
+          }
+
+          drawn.current = true;
         }
 
         // Which of these are already on disk is worth saying before anything is
@@ -140,9 +156,6 @@ export default function App({ host }: { host: HTMLElement }) {
           when it's closed -- most of the work happens with it closed. */}
       <div className="sd-dock">
         <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
-
-        {nowPlaying != null &&
-          <NowPlaying sample={nowPlaying} store={store} actions={actions} variant="floating" />}
       </div>
     </>
   );
@@ -159,16 +172,6 @@ function withPerPage(perPage: number) {
   url.searchParams.delete("page");
 
   return url.href;
-}
-
-/**
- * Whether the address asks for something Splice didn't render. Splice serves
- * the first page of a search and nothing else, so anything past it -- another
- * page, or more of them at a time -- is Splicedd's to draw.
- */
-function asksBeyondTheFirstPage() {
-  const params = new URL(window.location.href).searchParams;
-  return parseInt(params.get("page") ?? "1", 10) > 1 || params.has("limit");
 }
 
 /**

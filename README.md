@@ -24,22 +24,22 @@ are the same ones the site makes, so nothing has to be worked around.
 - **Paging that actually pages.** A logged-out listing shows one page and ends in an invitation to
   register; asking Splice's server for `?page=2` returns the first page again. So Splicedd asks Splice's
   API how far the search really runs, builds the paginator Splice would have — first, previous, numbered
-  pages, next, last, page size, *Page N of M* — and draws each page itself, in Splice's own row markup,
-  without a reload. A stepper stays in view so you never walk to the foot of the list to turn a page.
+  pages, next, last, page size, *Page N of M* — and draws every page itself, the first one included, in
+  Splice's own row markup and without a reload. A listing that changed hands halfway down would behave
+  two different ways; this one behaves one way throughout.
 - **The sign-up prompts taken down.** The `+` that licenses a sample with a credit, the *+ N more samples*
   standing in for the rest of the results with *Register for full access* under it, the marketing footer,
   and the *Rare Finds* button that looks like a filter but opens a blog post. It's a stylesheet rule
   rather than a deletion, so the *Hide the upsells* setting puts them straight back — which is what a
   subscriber wants, since the licence button is how a sample is bought. The navigation bar and the row
   menus are left alone.
-- **Follows Splice's own player.** Play anything on splice.com — a pack page, a rail, the search you were
-  already using — and a card appears with that sample, ready to drag or download. Splicedd reads it out of
-  the responses Splice already sent the page, so it costs no request of its own.
 - **Saves where you say, under its own name.** Point Splicedd at a folder once and every sample is written
   straight into it, at exactly the path the desktop app used — `Pack_Name/sample_name.wav`, nested as
   deeply as the name goes. A sample already there is left alone and reused, so nothing is downloaded,
   decoded or written twice. Without a chosen folder, files go to the browser's download folder, in a
-  folder of their own — where the browser gets the last word on the name.
+  folder of their own — where the browser gets the last word on the name. Either way the toast names the
+  exact path and offers to open it: *Show in folder* for a browser download, *Open* for a chosen folder,
+  which is as far as a browser will go once you have pointed it at one yourself.
 - **Decodes what Splice serves.** Previews are scrambled; Splicedd unscrambles them and converts the
   result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
 - **A heart that needs no account.** Splice's own opens a sign-up dialog when you're logged out; Splicedd

@@ -89,9 +89,13 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
       void record();
 
       if (announce) {
-        toasts.show(written.existed
-          ? `${file.name} is already in your library`
-          : `Saved ${written.path}`);
+        // A folder chosen through the browser can't be revealed in the file
+        // manager -- only a download the browser itself made can be -- so what
+        // is offered instead is the file, opened.
+        toasts.show(
+          written.existed ? `${file.name} is already in your library` : `Saved ${written.path}`,
+          { action: { label: "Open", run: () => openFile(file) } }
+        );
       }
 
       return;
@@ -107,7 +111,7 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     if (announce) {
       toasts.show(download.existed ? `${file.name} is already in your library` : `Saved ${filename}`, {
         action: {
-          label: "Show",
+          label: "Show in folder",
           run: () => void callWorker({ kind: "reveal-download", downloadId: download.downloadId })
         }
       });
@@ -183,4 +187,14 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     () => ({ busy, prepare, download, saveNow, attachDrag, dragStart }),
     [busy, prepare, download, saveNow, attachDrag, dragStart]
   );
+}
+
+/**
+ * Opens a saved sample in a tab of its own, which plays it. There is no way to
+ * reveal a file in the file manager once it has been written through a folder
+ * the reader chose: only a download the browser made itself can be shown, and
+ * that is what the other toast offers.
+ */
+function openFile(file: SampleFile) {
+  window.open(file.url, "_blank", "noopener");
 }

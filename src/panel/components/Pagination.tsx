@@ -1,19 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-/** Page numbers around the current one, with the first and last always present. */
-function pageList(current: number, total: number): (number | "gap")[] {
-  const pages: (number | "gap")[] = [];
-
-  for (let page = 1; page <= total; page++) {
-    if (page == 1 || page == total || Math.abs(page - current) <= 1) {
-      pages.push(page);
-    } else if (pages[pages.length - 1] != "gap") {
-      pages.push("gap");
-    }
-  }
-
-  return pages;
-}
+import { GAP, pageList } from "../../paging";
 
 export default function Pagination(
   { page, totalPages, onChange }: { page: number; totalPages: number; onChange: (page: number) => void }
@@ -29,7 +16,7 @@ export default function Pagination(
         disabled={page <= 1} onClick={() => onChange(page - 1)}
       ><ChevronLeft size={16} /></button>
 
-      {pageList(page, totalPages).map((entry, index) => entry == "gap"
+      {pageList(page, totalPages).map((entry, index) => entry == GAP
         ? <button key={`gap-${index}`} type="button" className="sd-page" data-ellipsis="true" disabled>...</button>
         : <button
             key={entry}

@@ -32,7 +32,10 @@ async function mount() {
   style.textContent = panelStyles;
   shadow.append(style);
 
+  // The panel's colour and typography live on this element rather than on the
+  // host, whose inline reset would otherwise win over them. See panel.css.
   const container = document.createElement("div");
+  container.className = "sd-shadow";
   shadow.append(container);
 
   // Attached to the document element rather than the body: a transformed

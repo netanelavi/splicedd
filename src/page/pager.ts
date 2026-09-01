@@ -9,10 +9,13 @@
 // nothing says every listing has a paginator -- Splicedd walks the address
 // itself, which is the same `?page=` Splice's own links carry.
 
-import { hasRows, pageLink, pageSummary } from "./site";
+import { ADDED, hasRows, pageLink, pageSummary } from "./site";
 
 export interface PageState {
   page: number;
+
+  /** Which listing this is: its address, minus anything that doesn't select. */
+  search: string;
 
   /** Splice's own wording for where the page is, when it offers one. */
   summary: string | null;
@@ -59,25 +62,36 @@ export class Pager {
   readonly turn = (direction: PageDirection) => {
     const link = pageLink(direction);
 
+    // Splice's own link belongs to Splice's own router; Splicedd's belongs to
+    // Splicedd, which draws the page rather than asking the server for it.
     if (link != null) {
-      link.click();
+      link.closest(`[${ADDED}]`) == null ? link.click() : this.open(link.href);
       return;
     }
 
     const page = currentPage() + (direction == "next" ? 1 : -1);
 
-    if (page < 1) {
-      return;
+    if (page >= 1) {
+      const url = new URL(window.location.href);
+      url.searchParams.set(PAGE_PARAM, page.toString());
+
+      this.open(url.href);
     }
+  };
 
-    const url = new URL(window.location.href);
-    url.searchParams.set(PAGE_PARAM, page.toString());
-
-    window.location.assign(url.href);
+  /**
+   * Moves to another page of the same search without leaving the document.
+   * Splice's server answers `?page=` on a logged-out search with the first page
+   * every time, so reloading would undo the move; the address is written into
+   * the history instead, and the listing is drawn from what the API returns.
+   */
+  readonly open = (href: string) => {
+    window.history.pushState(null, "", href);
+    this.schedule();
   };
 
   /** Splice re-renders in bursts; one read per frame is plenty. */
-  private readonly schedule = () => {
+  readonly schedule = () => {
     cancelAnimationFrame(this.frame);
     this.frame = requestAnimationFrame(() => this.read());
   };
@@ -98,12 +112,14 @@ export class Pager {
 }
 
 function state(): PageState {
+  const url = new URL(window.location.href);
   const page = currentPage();
   const summary = pageSummary();
   const total = totalPages(summary);
 
   return {
     page,
+    search: `${url.pathname}?${url.searchParams}`,
     summary,
     hasPrev: page > 1,
 
@@ -128,6 +144,6 @@ function same(a: PageState | null, b: PageState | null) {
     return a == b;
   }
 
-  return a.page == b.page && a.summary == b.summary &&
+  return a.page == b.page && a.search == b.search && a.summary == b.summary &&
     a.hasPrev == b.hasPrev && a.hasNext == b.hasNext;
 }

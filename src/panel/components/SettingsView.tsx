@@ -85,6 +85,13 @@ export default function SettingsView({ settings }: { settings: SpliceddSettings 
         <Switch label="Open with splice.com" checked={settings.openOnLoad} onChange={x => set("openOnLoad", x)} />
       </Setting>
 
+      <Setting
+        title="Hide the upsells"
+        description="Takes down Splice's subscribe prompts. Turn it off to keep the licence buttons."
+      >
+        <Switch label="Hide the upsells" checked={settings.hideUpsells} onChange={x => set("hideUpsells", x)} />
+      </Setting>
+
       <Setting title="Results" description="How many samples each search page holds.">
         <Select
           icon={Rows3} label="Results per page"

@@ -11,7 +11,7 @@
 // up by its file name alone. Each step runs once per page and once per name.
 
 import { SpliceSample } from "../splice/api";
-import { DEFAULT_FILTERS, SampleFilters } from "../splice/search";
+import { DEFAULT_FILTERS, SampleFilters, SampleSearchResult } from "../splice/search";
 import { filtersFromLocation } from "./location";
 import { SampleIndex } from "./sampleIndex";
 import { SiteRow, perPage } from "./site";
@@ -20,14 +20,29 @@ export class SampleResolver {
   /** Lookups in flight or already done, so nothing is ever asked for twice. */
   private readonly lookups = new Map<string, Promise<void>>();
 
+  /** What each listing looked at so far holds, keyed as the lookups are. */
+  private readonly results = new Map<string, SampleSearchResult>();
+
   /**
    * @param index What the page has already been sent.
    * @param search Asks Splice for the samples matching a set of filters.
    */
   constructor(
     private readonly index: SampleIndex,
-    private readonly search: (filters: SampleFilters) => Promise<readonly SpliceSample[]>
+    private readonly search: (filters: SampleFilters) => Promise<SampleSearchResult>
   ) {}
+
+  /**
+   * The listing the page's own address describes: how far it runs, and what is
+   * on it. Both have to be asked for -- the page doesn't say how it pages, and
+   * when it's logged out it doesn't page at all.
+   */
+  async pageResult(): Promise<SampleSearchResult | null> {
+    const key = pageKey();
+    await this.lookUpPage();
+
+    return this.results.get(key) ?? null;
+  }
 
   /**
    * The sample a row shows, if it's already known -- which is all a `dragstart`
@@ -61,13 +76,14 @@ export class SampleResolver {
 
   /** Runs the search the page itself is showing, naming every row on it. */
   private lookUpPage() {
-    const url = new URL(window.location.href);
+    const key = pageKey();
 
-    // Everything that decides which samples this page holds, and nothing that
-    // doesn't: two addresses differing only in a scroll anchor are one page.
-    const key = `page ${url.pathname}?${url.searchParams} x${perPage()}`;
+    return this.once(key, async () => {
+      const result = await this.search(filtersFromLocation(new URL(window.location.href), perPage()));
+      this.results.set(key, result);
 
-    return this.once(key, () => this.search(filtersFromLocation(url, perPage())));
+      return result;
+    });
   }
 
   private lookUpName(filename: string) {
@@ -75,11 +91,11 @@ export class SampleResolver {
       this.search({ ...DEFAULT_FILTERS, query: filename }));
   }
 
-  private once(key: string, run: () => Promise<readonly SpliceSample[]>) {
+  private once(key: string, run: () => Promise<SampleSearchResult>) {
     let lookup = this.lookups.get(key);
 
     if (lookup == null) {
-      lookup = run().then(samples => { this.index.add(samples); });
+      lookup = run().then(result => { this.index.add(result.items); });
 
       // A failure isn't an answer, so it isn't remembered as one.
       lookup.catch(() => this.lookups.delete(key));
@@ -88,4 +104,13 @@ export class SampleResolver {
 
     return lookup;
   }
+}
+
+/**
+ * Everything that decides which samples a listing holds, and nothing that
+ * doesn't: two addresses differing only in a scroll anchor are one listing.
+ */
+function pageKey() {
+  const url = new URL(window.location.href);
+  return `${url.pathname}?${url.searchParams} x${perPage()}`;
 }

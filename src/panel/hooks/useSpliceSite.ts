@@ -10,11 +10,14 @@
 // is free to re-render, paginate or navigate underneath -- there is nothing to
 // re-attach, and no observer watching for it.
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { errorMessage } from "../../chrome/messages";
+import { SitePlayer } from "../../page/player";
 import { SampleResolver } from "../../page/resolver";
-import { SITE_STYLES, SiteRow, controlOf, markRow, rowOf } from "../../page/site";
+import {
+  ROW_MARK, SITE_STYLES, SiteRow, controlOf, markRow, pageRequestedBy, playedBy, rowOf
+} from "../../page/site";
 import { SampleStore } from "../sampleStore";
 import { SampleActions } from "./useSampleActions";
 import { Toasts } from "./useToasts";
@@ -23,12 +26,15 @@ import { Toasts } from "./useToasts";
 const DWELL_MS = 120;
 
 export function useSpliceSite(
-  { resolver, store, actions, toasts, host }: {
+  { resolver, store, actions, toasts, host, openPage }: {
     resolver: SampleResolver;
     store: SampleStore;
     actions: SampleActions;
     toasts: Toasts;
     host: HTMLElement;
+
+    /** Moves to another page of the listing, without leaving the document. */
+    openPage: (href: string) => void;
   }
 ) {
   useEffect(() => {
@@ -38,6 +44,11 @@ export function useSpliceSite(
     document.head.append(style);
     return () => style.remove();
   }, []);
+
+  // Splice's player has nothing to play on a page Splicedd drew, so its play
+  // button is answered here for those rows and left alone on its own.
+  const player = useMemo(() => new SitePlayer(), []);
+  useEffect(() => () => player.dispose(), [player]);
 
   /**
    * Renders a row's sample ahead of the drag that will need it: a drag payload
@@ -79,6 +90,32 @@ export function useSpliceSite(
   });
 
   useDocumentEvent("click", event => {
+    const requested = pageRequestedBy(event.target);
+
+    // A modified click is the reader asking their browser for the link, not
+    // asking Splicedd to turn the page.
+    if (requested != null && !modified(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+      openPage(requested);
+
+      return;
+    }
+
+    if (playedBy(event.target)?.hasAttribute(ROW_MARK) == true) {
+      const row = rowOf(event.target);
+
+      if (row != null) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        void player.toggle(row.element, async () => store.preview(await resolver.resolve(row)))
+          .catch(err => toasts.show(errorMessage(err), { tone: "error" }));
+
+        return;
+      }
+    }
+
     // Alt-click still reaches Splice's own button, which for a subscriber
     // downloads the licensed file rather than the preview.
     if (event.altKey || controlOf(event.target) != "download") {
@@ -120,6 +157,11 @@ export function useSpliceSite(
     // Splice's handler would replace the payload with a link to its desktop app.
     event.stopPropagation();
   });
+}
+
+/** Whether the reader asked their browser for the link rather than for the page. */
+function modified(event: MouseEvent) {
+  return event.button != 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 }
 
 /**

@@ -7,15 +7,47 @@
 // markup is a change to this file alone.
 
 /** Splice's own hooks, exactly as its markup spells them. */
-const QA = {
+export const QA = {
   row: "sampleAssetRow",
   filename: "asset-filename",
   download: "download-button",
   drag: "drag-button",
-  perPage: "pagination-per-page-select",
-  summary: "pagination-summary",
+  license: "license-button",
+  menu: "menu-panel",
+  play: "playPausePlaybackButton",
+  cover: "cover-art-image",
+  duration: "asset-duration",
+  bpm: "bpm",
+  tags: "tags",
+  waveform: "sounds.waveform-preview",
+  pagination: "pagination",
+  page: "pagination-page",
+  first: "pagination-first",
   prev: "pagination-prev",
-  next: "pagination-next"
+  next: "pagination-next",
+  last: "pagination-last",
+  perPageLabel: "pagination-per-page",
+  perPage: "pagination-per-page-select",
+  summary: "pagination-summary"
+} as const;
+
+/**
+ * Splice's own class names, for the elements Splicedd adds to its page: an
+ * added button should be one of Splice's buttons, not a guest in its markup.
+ * The `svelte-` names are build hashes and will go stale on a deploy, which is
+ * why the injected stylesheet below stands the buttons up on its own.
+ */
+export const CLASSES = {
+  actions: "top-level-action",
+  button: "variant-transparent icon-only icon-small",
+  icon: "icon svelte-fv3oar",
+  hidden: "visually-hidden",
+  pagination: "asset-pagination",
+  list: "svelte-1iv1had",
+  page: "pagination-page svelte-1iv1had",
+  current: "current",
+  perPage: "pagination-per-page",
+  summary: "pagination-summary"
 } as const;
 
 /** What Splice's own paginator falls back to when the page doesn't say. */
@@ -24,7 +56,7 @@ const DEFAULT_PER_PAGE = 25;
 /** Where a row links to the sample it shows; the last segment is its hash. */
 const PERMALINK = 'a[href*="/sounds/sample/"]';
 
-const hook = (name: string) => `[data-qa="${name}"]`;
+export const hook = (name: string) => `[data-qa="${name}"]`;
 
 /** A sample row on splice.com, reduced to what identifies the sample it shows. */
 export interface SiteRow {
@@ -69,6 +101,60 @@ export function hasRows(): boolean {
   return document.querySelector(hook(QA.row)) != null;
 }
 
+export function rows(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>(hook(QA.row))];
+}
+
+/**
+ * Where a row keeps its buttons. Splice groups them in a form -- it points at
+ * the pricing page, which is what its own download button is for -- with the
+ * surrounding element as the fallback if that ever stops being true.
+ */
+export function actionsOf(row: HTMLElement): HTMLElement | null {
+  return row.querySelector<HTMLElement>(`.${CLASSES.actions}`) ??
+    row.querySelector<HTMLElement>(".asset-actions") ??
+    row.querySelector<HTMLElement>(".cell--actions");
+}
+
+/** Splice's own paginator, if this page has one. */
+export function pagination(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(hook(QA.pagination));
+}
+
+/**
+ * The page a click asks for, when it lands on a paginator Splicedd drew. Those
+ * links can't be followed: Splice's server answers a logged-out `?page=` with
+ * the first page whatever it says, so the move happens here instead.
+ */
+export function pageRequestedBy(node: EventTarget | null): string | null {
+  const link = elementOf(node)?.closest<HTMLAnchorElement>("a[href]");
+
+  return link != null && link.closest(`[${ADDED}]`) != null ? link.href : null;
+}
+
+/**
+ * Where a paginator belongs: just above the FAQ that closes every listing --
+ * which is exactly where the invitation to register for full access sits on a
+ * page that offers no paging at all -- and failing that, after the list.
+ */
+export function paginationAnchor(): { parent: Element; before: Element | null } | null {
+  const marker = document.querySelector("section.faq-section") ??
+    document.querySelector(".remaining-results");
+
+  if (marker?.parentElement != null) {
+    return { parent: marker.parentElement, before: marker };
+  }
+
+  // The end of the list, not the end of the last row: a paginator dropped into
+  // a row would land inside a grid that knows nothing about it.
+  const all = rows();
+  const list = all[all.length - 1]?.parentElement;
+
+  return list?.parentElement == null
+    ? null
+    : { parent: list.parentElement, before: list.nextElementSibling };
+}
+
 /** What Splice's own paginator says about where it is, e.g. `Page 3 of 343`. */
 export function pageSummary(): string | null {
   return document.querySelector(hook(QA.summary))?.textContent?.trim() ?? null;
@@ -84,14 +170,41 @@ export function pageLink(direction: "prev" | "next"): HTMLAnchorElement | null {
 }
 
 /**
- * How many samples the page is showing per page, straight from Splice's own
- * paginator -- the one part of a page's search that isn't in its URL.
+ * How many samples the listing is showing per page -- the one part of a page's
+ * search that its address doesn't always carry.
+ *
+ * The reader's own choice comes first, then Splice's paginator if the page has
+ * one of its own, and failing both, the rows themselves: a listing that shows
+ * ten of them is a listing of ten per page, whatever anything else claims.
  */
 export function perPage(): number {
-  const select = document.querySelector<HTMLSelectElement>(hook(QA.perPage));
-  const value = select == null ? NaN : parseInt(select.value, 10);
+  for (const value of [statedPerPage(), splicesPerPage(), rows().length]) {
+    if (value != null && value > 0) {
+      return value;
+    }
+  }
 
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_PER_PAGE;
+  return DEFAULT_PER_PAGE;
+}
+
+function statedPerPage() {
+  const stated = new URL(window.location.href).searchParams.get("limit");
+  const value = stated == null ? NaN : parseInt(stated, 10);
+
+  return Number.isFinite(value) ? value : null;
+}
+
+function splicesPerPage() {
+  const select = document.querySelector<HTMLSelectElement>(hook(QA.perPage));
+
+  // Splicedd's own paginator only ever reports the choice already in the
+  // address, which is the line above.
+  if (select == null || select.closest(`[${ADDED}]`) != null) {
+    return null;
+  }
+
+  const value = parseInt(select.value, 10);
+  return Number.isFinite(value) ? value : null;
 }
 
 function hashOf(row: HTMLElement) {
@@ -121,14 +234,36 @@ export function markRow(row: HTMLElement, state: "loading" | "ready" | null) {
   }
 }
 
+/** Marks everything Splicedd added, so it can be recognised and replaced. */
+export const ADDED = "data-splicedd-added";
+
+/** Marks a row Splicedd drew, which is a copy of one Splice drew. */
+export const ROW_MARK = "data-splicedd-row";
+
 /**
- * Tints Splice's own download and drag buttons once Splicedd has the file
- * behind them, so it's clear the buttons now do something they didn't before.
+ * The stylesheet Splicedd puts on splice.com.
+ *
+ * It does three things: stands up the buttons and the paginator Splicedd adds,
+ * without depending on Svelte class hashes that go stale on every deploy; tints
+ * a row's buttons once the file behind them is ready; and takes down the offers
+ * to subscribe, which is a rule rather than a deletion so that turning the
+ * setting off puts them straight back.
  */
 export const SITE_STYLES = `
-  [data-splicedd] ${hook(QA.download)},
-  [data-splicedd] ${hook(QA.drag)} {
+  [${ADDED}] {
+    background: none;
+    border: none;
+    padding: 4px;
+    color: inherit;
+    cursor: pointer;
     transition: color 0.15s ease, opacity 0.15s ease;
+  }
+
+  [${ADDED}] svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+    fill: currentColor;
   }
 
   [data-splicedd="loading"] ${hook(QA.download)},
@@ -140,4 +275,95 @@ export const SITE_STYLES = `
   [data-splicedd="ready"] ${hook(QA.drag)} {
     color: #7c6cff;
   }
+
+  nav[${ADDED}] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin: 24px 0;
+    padding: 0;
+  }
+
+  nav[${ADDED}] ul {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  nav[${ADDED}] .${CLASSES.page.split(" ")[0]} {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: 6px;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  nav[${ADDED}] .${CLASSES.current} {
+    font-weight: 700;
+    text-decoration: underline;
+  }
+
+  nav[${ADDED}] [aria-disabled="true"] {
+    opacity: 0.35;
+    pointer-events: none;
+  }
+
+  nav[${ADDED}] select {
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 6px;
+    font: inherit;
+    color: inherit;
+    background: rgba(127, 127, 127, 0.18);
+  }
+
+  /*
+    What a logged-out page puts where its results and its buttons should be:
+    the "+" that licenses a sample with a credit, the "+ N more samples" that
+    stands in for the rest of the results with "Register for full access"
+    beneath it, and the marketing footer under that.
+
+    The navigation bar and the row menus are left alone -- signing in is how
+    the account this all belongs to is reached, and the menu holds more than an
+    offer to buy.
+  */
+  html[data-splicedd-tidy] .${CLASSES.actions} > ${hook(QA.license)},
+  html[data-splicedd-tidy] .remaining-results,
+  html[data-splicedd-tidy] .button-wrapper:has(use[href="#icon-lock"]),
+  html[data-splicedd-tidy] div.footer-container,
+
+  /*
+    "Rare Finds" reads like a filter sitting among the filters, but it submits
+    a form that opens a blog post. Splicedd's searches constrain nothing, so
+    rare finds are in every result already.
+  */
+  html[data-splicedd-tidy] .rare-finds-wrapper,
+  html[data-splicedd-tidy] form#rare-finds-default {
+    display: none !important;
+  }
+
+  /* The row playing, on a page Splice's own player knows nothing about. */
+  [${ROW_MARK}-playing] ${hook(QA.play)} {
+    color: #7c6cff;
+  }
 `;
+
+/** Turns the offers to subscribe on or off across the whole page at once. */
+export function setUpsellsHidden(hidden: boolean) {
+  document.documentElement.toggleAttribute("data-splicedd-tidy", hidden);
+}
+
+/** The row whose play button a click landed on, if it landed on one. */
+export function playedBy(node: EventTarget | null): HTMLElement | null {
+  const button = elementOf(node)?.closest(hook(QA.play));
+  return button?.closest<HTMLElement>(hook(QA.row)) ?? null;
+}

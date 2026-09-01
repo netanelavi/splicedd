@@ -33,6 +33,13 @@ export interface SpliceddSettings {
 
   /** Whether the panel opens by itself when a splice.com page loads. */
   openOnLoad: boolean;
+
+  /**
+   * Whether to take down the offers to subscribe that a logged-out Splice page
+   * puts where its results and its buttons would be. A subscriber wants them:
+   * the licence button on a row is how a sample is actually bought.
+   */
+  hideUpsells: boolean;
 }
 
 export const DEFAULT_SETTINGS: SpliceddSettings = {
@@ -44,7 +51,8 @@ export const DEFAULT_SETTINGS: SpliceddSettings = {
   theme: "dark",
   panelWidth: 560,
   resultsPerPage: 50,
-  openOnLoad: false
+  openOnLoad: false,
+  hideUpsells: true
 };
 
 const KEY = "settings";

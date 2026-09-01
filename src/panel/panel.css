@@ -24,9 +24,26 @@
     "Helvetica Neue", Arial, sans-serif;
 
   all: initial;
+}
+
+/*
+  The host carries `all: initial` inline, because a page rule matching the host
+  element beats a `:host` rule and could otherwise move or hide the panel. That
+  inline reset also beats `:host` for colour and typography, so the properties
+  the panel inherits are set one level in, on the shadow root's own container,
+  where nothing on the page can reach them. Custom properties are exempt from
+  `all`, so the tokens above survive it.
+*/
+.sd-shadow {
   color-scheme: dark;
   font-family: var(--sd-font);
+  font-size: 14px;
+  line-height: 1.45;
   color: var(--sd-text);
+}
+
+:host([data-theme="light"]) .sd-shadow {
+  color-scheme: light;
 }
 
 :host([data-theme="light"]) {
@@ -39,8 +56,6 @@
   --sd-muted: #6b6c7b;
   --sd-accent-soft: rgba(124, 108, 255, 0.14);
   --sd-shadow: 0 16px 48px rgba(20, 20, 40, 0.18);
-
-  color-scheme: light;
 }
 
 *, *::before, *::after {

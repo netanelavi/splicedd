@@ -13,13 +13,22 @@ are the same ones the site makes, so nothing has to be worked around.
 
 - **Drag straight into a DAW.** Grab a row and drop it on Ableton, FL Studio, Bitwig, Logic, a folder —
   anywhere that accepts a dropped file. The sample is decoded and converted before the drop lands.
-- **Splice's own buttons, doing the real thing.** Every sample row on splice.com already has a download
-  button and a *Drag to DAW* handle. Splicedd takes both over: the download saves a decoded WAV instead of
-  sending you to the pricing page, and the drag hands your DAW the file instead of a link to Splice's
-  desktop app. Hold <kbd>Alt</kbd> while clicking to reach Splice's own download.
-- **Walk the pages from where the samples are.** Splice paginates at the foot of a very long list; the
-  Splicedd stepper offers the same movement without leaving the row you're on, following Splice's own
-  next and previous links.
+- **A download button and a drag handle on every row.** A logged-out Splice row has neither — just a
+  licence button and a heart. Splicedd adds both, in Splice's own markup and using Splice's own sprite:
+  the download saves a decoded WAV, and the drag hands your DAW the file rather than a link to Splice's
+  desktop app. Where Splice draws its own (a subscriber's row), those are taken over instead, and holding
+  <kbd>Alt</kbd> while clicking still reaches Splice's, which is the licensed file.
+- **Paging that actually pages.** A logged-out listing shows one page and ends in an invitation to
+  register; asking Splice's server for `?page=2` returns the first page again. So Splicedd asks Splice's
+  API how far the search really runs, builds the paginator Splice would have — first, previous, numbered
+  pages, next, last, page size, *Page N of M* — and draws each page itself, in Splice's own row markup,
+  without a reload. A stepper stays in view so you never walk to the foot of the list to turn a page.
+- **The sign-up prompts taken down.** The `+` that licenses a sample with a credit, the *+ N more samples*
+  standing in for the rest of the results with *Register for full access* under it, the marketing footer,
+  and the *Rare Finds* button that looks like a filter but opens a blog post. It's a stylesheet rule
+  rather than a deletion, so the *Hide the upsells* setting puts them straight back — which is what a
+  subscriber wants, since the licence button is how a sample is bought. The navigation bar and the row
+  menus are left alone.
 - **Follows Splice's own player.** Play anything on splice.com — a pack page, a rail, the search you were
   already using — and a card appears with that sample, ready to drag or download. Splicedd reads it out of
   the responses Splice already sent the page, so it costs no request of its own.
@@ -59,6 +68,7 @@ The gear in the panel header holds:
 | Trim encoder delay | Drops the silence MP3 encoders prepend, so loops start on the beat. |
 | Save when dragging | Also keeps a copy on disk whenever a sample is dragged out. |
 | Open with splice.com | Shows the panel as soon as a Splice page loads. |
+| Hide the upsells | Takes down Splice's subscribe prompts. Off keeps the licence buttons. |
 | Results, theme | Page size, and light or dark. |
 
 ## How it works
@@ -69,7 +79,8 @@ splice.com page
 │     └── wraps fetch, and forwards a copy of what Splice asks for
 │
 ├── content.js ── the panel, in a shadow root
-│     ├── answers Splice's own download and drag buttons
+│     ├── adds a download button and a drag handle to every row
+│     ├── draws the pages Splice won't serve, in Splice's own markup
 │     ├── names the sample the page is playing, from what the tap saw
 │     ├── searches Splice's GraphQL API from the page itself
 │     ├── unscrambles previews and converts them to WAV (Web Audio)
@@ -115,7 +126,7 @@ Source layout:
 | Path | |
 |---|---|
 | `src/splice/` | The Splice domain, free of any browser-extension concern: the search API and its filters, reading samples out of a response, the preview decoder, MP3-to-WAV conversion, sample paths. |
-| `src/page/` | splice.com itself: the tap that watches its requests from the page's own world, the index of what it has been sent, the one module that knows its markup, and the paginator. |
+| `src/page/` | splice.com itself: the tap that watches its requests from the page's own world, the index of what it has been sent, the one module that knows its markup, and what Splicedd adds to it — the row buttons, the paginator, the listing it draws and the player behind it. |
 | `src/chrome/` | The extension platform: settings, messaging, and network access. |
 | `src/panel/` | The React panel injected into splice.com. |
 | `src/background.ts`, `src/offscreen.ts`, `src/content.tsx`, `src/page/tap.ts` | The four entry points the manifest names. |

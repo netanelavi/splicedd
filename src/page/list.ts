@@ -11,11 +11,15 @@
 // ours to write, and every one of them is named by a `data-qa` hook.
 
 import { SpliceSample, SpliceSamplePack } from "../splice/api";
-import { EMPTY_WAVEFORM, WAVEFORM_VIEW_BOX, waveformPath } from "../splice/waveform";
 import { QA, ROW_MARK, hook, rows } from "./site";
 
 /** Where a tag on a row links: the same search, narrowed to that tag. */
 const TAG_PARAM = "tags";
+
+/** How Splice's own waveform is drawn: thin bars with a hair between them. */
+const BAR_WIDTH = 2;
+const BAR_GAP = 1;
+const MIN_BAR = 1;
 
 export class RowList {
   /** A row Splice drew, kept to make more of them. */
@@ -97,29 +101,20 @@ export class RowList {
     return row;
   }
 
+  /**
+   * Fills in the waveform Splice would have drawn, on the canvas Splice put
+   * there -- same element, same size, same styling. Replacing it with something
+   * of Splicedd's own is what made a drawn page look like someone else's.
+   */
   private drawWaveform(row: HTMLElement, sample: SpliceSample) {
-    const target = row.querySelector(hook(QA.waveform));
+    const canvas = row.querySelector<HTMLCanvasElement>(`${hook(QA.waveform)} canvas`);
     const url = sample.files.find(x => x.asset_file_type_slug == "waveform")?.url;
 
-    if (target == null) {
+    if (canvas == null || url == null) {
       return;
     }
 
-    // Splice draws its waveforms onto a canvas from a file it fetches per row.
-    // Drawing an SVG instead means the row is complete the moment the data
-    // lands, with no measuring and no second paint.
-    const draw = (data: number[]) => {
-      target.innerHTML =
-        `<svg viewBox="0 0 ${WAVEFORM_VIEW_BOX.width} ${WAVEFORM_VIEW_BOX.height}" preserveAspectRatio="none" ` +
-        `style="width:100%;height:100%;display:block">` +
-        `<path fill="currentColor" opacity="0.65" d="${waveformPath(data)}"></path></svg>`;
-    };
-
-    draw(EMPTY_WAVEFORM);
-
-    if (url != null) {
-      this.waveform(url).then(draw, () => {});
-    }
+    this.waveform(url).then(data => paintWaveform(canvas, data), () => {});
   }
 }
 
@@ -200,4 +195,44 @@ function duration(milliseconds: number) {
 
 function fileOf(name: string) {
   return name.split("/").pop() ?? name;
+}
+
+/**
+ * Splice's waveform: a column of rounded bars either side of the middle, in
+ * whatever colour the canvas has inherited. Drawn at the element's real pixel
+ * size so it isn't soft on a high-density screen.
+ */
+function paintWaveform(canvas: HTMLCanvasElement, data: number[]) {
+  const ratio = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth || canvas.width;
+  const height = canvas.clientHeight || canvas.height;
+
+  canvas.width = Math.round(width * ratio);
+  canvas.height = Math.round(height * ratio);
+
+  const context = canvas.getContext("2d");
+
+  if (context == null || data.length == 0) {
+    return;
+  }
+
+  context.scale(ratio, ratio);
+  context.fillStyle = window.getComputedStyle(canvas).color;
+
+  const bars = Math.max(1, Math.floor(width / (BAR_WIDTH + BAR_GAP)));
+  const middle = height / 2;
+
+  for (let bar = 0; bar < bars; bar++) {
+    // Each bar stands for a slice of the data, taken at its loudest.
+    const from = Math.floor((bar / bars) * data.length);
+    const to = Math.max(from + 1, Math.floor(((bar + 1) / bars) * data.length));
+
+    let peak = 0;
+    for (let i = from; i < to; i++) {
+      peak = Math.max(peak, Math.abs(data[i] ?? 0));
+    }
+
+    const tall = Math.max(MIN_BAR, peak * height);
+    context.fillRect(bar * (BAR_WIDTH + BAR_GAP), middle - tall / 2, BAR_WIDTH, tall);
+  }
 }

@@ -13,7 +13,9 @@ are the same ones the site makes, so nothing has to be worked around.
 ## What it does
 
 - **Drag straight into a DAW.** Grab a row and drop it on Ableton, FL Studio, Bitwig, Logic, a folder —
-  anywhere that accepts a dropped file. The sample is decoded and converted before the drop lands.
+  anywhere that accepts a dropped file. A drag has to hand the file over the instant it starts, so the
+  page is prepared ahead of you — every row decoded and converted in the background, a couple at a time —
+  and the first drag of any row works.
 - **A download button and a drag handle on every row.** A logged-out Splice row has neither — just a
   licence button and a heart. Splicedd adds both, in Splice's own markup and using Splice's own sprite:
   the download saves a decoded WAV, and the drag hands your DAW the file rather than a link to Splice's

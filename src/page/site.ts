@@ -371,8 +371,21 @@ export const SITE_STYLES = `
     color: #55b878;
   }
 
+  /*
+    A marked row. The heart is a sprite with its own fill, so colouring the
+    button alone can leave nothing to see; the ring behind it is Splicedd's own
+    and can't be painted over by whatever the symbol carries.
+  */
   [${LIKE_MARK}] ${hook(QA.like)} {
     color: #ff6b8b;
+    background: rgba(255, 107, 139, 0.16);
+    border-radius: 50%;
+  }
+
+  [${LIKE_MARK}] ${hook(QA.like)} svg,
+  [${LIKE_MARK}] ${hook(QA.like)} use {
+    fill: currentColor;
+    stroke: currentColor;
   }
 
   [${PICK_MARK}] {

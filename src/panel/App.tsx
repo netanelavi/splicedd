@@ -105,6 +105,7 @@ export default function App({ host }: { host: HTMLElement }) {
         // Which of these are already on disk is worth saying before anything is
         // hovered, and only the search that just landed can answer it.
         void latest.current.survey();
+        void latest.current.prepare();
         void rememberSearch(result.records);
       },
       () => { if (live) injector.refresh(null); }

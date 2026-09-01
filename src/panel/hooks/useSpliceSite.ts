@@ -27,8 +27,14 @@ import { SampleStore } from "../sampleStore";
 import { SampleActions } from "./useSampleActions";
 import { Toasts } from "./useToasts";
 
-/** How long the pointer rests on a row before its file is built. */
-const DWELL_MS = 120;
+/**
+ * How many rows are prepared at once in the background. A drag has to hand over
+ * a finished file the instant it starts, so waiting for a hover to begin the
+ * work means the first drag of every row fails -- which is what "you have to
+ * download it first" was. The page is prepared ahead of the reader instead,
+ * a couple at a time so the fetching and decoding never crowds the page out.
+ */
+const AHEAD = 2;
 
 export function useSpliceSite(
   { resolver, store, actions, toasts, host, openPage }: {
@@ -60,6 +66,10 @@ export function useSpliceSite(
    * has to be attached the instant the drag begins, with nothing to await.
    */
   const warm = useCallback(async (row: SiteRow) => {
+    if (row.element.dataset.splicedd == "ready") {
+      return;
+    }
+
     markRow(row.element, "loading");
 
     try {
@@ -122,8 +132,28 @@ export function useSpliceSite(
     toasts.release(progress);
   }, [actions, resolver, toasts]);
 
+  /**
+   * Prepares every row on the page, the one under the pointer first. Each is
+   * only ever prepared once: the store remembers what it has rendered, so this
+   * is cheap to call again whenever the listing changes.
+   */
+  const prepare = useCallback(async (first?: SiteRow) => {
+    const queue = [...(first == null ? [] : [first]), ...siteRows()];
+    const seen = new Set<HTMLElement>();
+
+    const next = async () => {
+      for (const row of queue) {
+        if (!seen.has(row.element)) {
+          seen.add(row.element);
+          await warm(row);
+        }
+      }
+    };
+
+    await Promise.all(Array.from({ length: AHEAD }, next));
+  }, [warm]);
+
   const hovered = useRef<HTMLElement | null>(null);
-  const dwell = useRef(0);
 
   useDocumentEvent("pointerover", event => {
     if (host.contains(event.target as Node)) {
@@ -136,11 +166,11 @@ export function useSpliceSite(
       return;
     }
 
-    clearTimeout(dwell.current);
     hovered.current = row?.element ?? null;
 
+    // Whatever the reader is looking at goes to the front of the queue.
     if (row != null) {
-      dwell.current = window.setTimeout(() => void warm(row), DWELL_MS);
+      void warm(row);
     }
   });
 
@@ -312,7 +342,7 @@ export function useSpliceSite(
   }, [saveAll]);
 
   // A fresh object every render would restart everything that depends on it.
-  return useMemo(() => ({ survey, saveBatch }), [survey, saveBatch]);
+  return useMemo(() => ({ survey, saveBatch, prepare }), [survey, saveBatch, prepare]);
 }
 
 /** What a list keeps about a sample: enough to find it again without Splice. */

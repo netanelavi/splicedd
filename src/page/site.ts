@@ -15,6 +15,8 @@ export const QA = {
   license: "license-button",
   menu: "menu-panel",
   play: "playPausePlaybackButton",
+  menuContainer: "menu-container",
+  share: "share-button",
   cover: "cover-art-image",
   duration: "asset-duration",
   bpm: "bpm",
@@ -355,11 +357,92 @@ export const SITE_STYLES = `
   [${ROW_MARK}-playing] ${hook(QA.play)} {
     color: #7c6cff;
   }
+
+  /*
+    Splice shows and hides a row's menu from its own code, which a drawn row
+    doesn't have. On those rows the menu is shown by an attribute instead.
+  */
+  [${ROW_MARK}] ${hook(QA.menu)} {
+    display: none;
+  }
+
+  [${ROW_MARK}] ${hook(QA.menu)}[data-splicedd-open] {
+    display: block;
+    position: absolute;
+    right: 0;
+    z-index: 20;
+  }
+
+  [${ROW_MARK}] ${hook(QA.menuContainer)} {
+    position: relative;
+  }
 `;
 
 /** Turns the offers to subscribe on or off across the whole page at once. */
 export function setUpsellsHidden(hidden: boolean) {
   document.documentElement.toggleAttribute("data-splicedd-tidy", hidden);
+}
+
+/**
+ * Brings the top of the listing into view. A page turned from the paginator at
+ * the foot of a very long list leaves the reader at the foot of it, looking at
+ * the FAQ that follows -- which is not where the new page is.
+ */
+export function showListTop() {
+  const list = rows()[0]?.parentElement;
+
+  if (list != null) {
+    list.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+}
+
+/**
+ * Follows the theme Splice's own page is in, and reports it. The panel is a
+ * guest here; a light page with a black panel bolted to it looks like a fault.
+ */
+export function followPageTheme(onTheme: (theme: "dark" | "light") => void) {
+  const read = () => onTheme(document.documentElement.dataset.theme == "light" ? "light" : "dark");
+
+  const observer = new MutationObserver(read);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  read();
+  return () => observer.disconnect();
+}
+
+/**
+ * The menu a click asks to open or close, on a row Splicedd drew.
+ *
+ * Splice's own rows carry Splice's handlers. A copy of one carries its markup
+ * and none of its behaviour -- `cloneNode` doesn't clone event listeners -- so
+ * the menu on a drawn row has to be opened here or it doesn't open at all.
+ */
+export function menuToggledBy(node: EventTarget | null): HTMLElement | null {
+  const element = elementOf(node);
+  const row = element?.closest<HTMLElement>(hook(QA.row));
+
+  if (row == null || !row.hasAttribute(ROW_MARK)) {
+    return null;
+  }
+
+  const details = element?.closest(`.details, ${hook(QA.menuContainer)}`);
+  const inside = element?.closest(hook(QA.menu)) != null;
+
+  // The button that opens it, not anything inside the menu it opened.
+  return details == null || inside ? null : row.querySelector<HTMLElement>(hook(QA.menu));
+}
+
+/** The row whose "copy link" a click landed on, if it landed on one. */
+export function sharedBy(node: EventTarget | null): HTMLElement | null {
+  const button = elementOf(node)?.closest(hook(QA.share));
+  const row = button?.closest<HTMLElement>(hook(QA.row));
+
+  return row?.hasAttribute(ROW_MARK) == true ? row : null;
+}
+
+/** Where a row links to the sample it shows. */
+export function permalinkOf(row: HTMLElement): string | null {
+  return row.querySelector<HTMLAnchorElement>(PERMALINK)?.href ?? null;
 }
 
 /** The row whose play button a click landed on, if it landed on one. */

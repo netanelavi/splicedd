@@ -5,7 +5,7 @@ import { errorMessage } from "../../chrome/messages";
 import { callWorker } from "../../chrome/messages";
 import { ensureFolderAccess, saveToFolder } from "../../chrome/folder";
 import { saveFile } from "../../chrome/net";
-import { settings } from "../../chrome/settings";
+import { DOWNLOADS_FOLDER } from "../../chrome/settings";
 import { joinPath } from "../../splice/paths";
 import { SampleFile, SampleStore } from "../sampleStore";
 import { attachFileDrag, startedOnControl } from "../drag";
@@ -83,7 +83,7 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
       // Falling back to the browser's download folder, which is everyone's
       // download folder: the sample library goes in a folder of its own there,
       // where a chosen one is already a folder of its own.
-      const filename = joinPath(settings().downloadDir, file.path);
+      const filename = joinPath(DOWNLOADS_FOLDER, file.path);
       const saved = await saveFile(file.bytes, file.mime, filename);
 
       if (announce) {
@@ -137,10 +137,9 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
 
     // Chromium only writes the file out if the drop target accepts it, and a
     // DAW that refuses would leave the user with nothing. Saving in the
-    // background means the sample is on disk either way.
-    if (settings().saveOnDrag) {
-      void save(file, false);
-    }
+    // background means the sample reaches the library either way -- which is
+    // what the desktop app did, since it dragged out of the library itself.
+    void save(file, false);
 
     return true;
   }, [store, prepare, save, toasts]);

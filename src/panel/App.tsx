@@ -1,37 +1,35 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { PanelCommand } from "../chrome/messages";
-import { assetUrl } from "../chrome/assets";
 import { fetchJson } from "../chrome/net";
 import { settings as currentSettings } from "../chrome/settings";
-import { useSettings } from "./useSettings";
 import { PageObserver } from "../page/observer";
 import { Pager } from "../page/pager";
 import { SiteInjector } from "../page/inject";
 import { RowList } from "../page/list";
 import { SampleResolver } from "../page/resolver";
-import { setUpsellsHidden } from "../page/site";
+import { followPageTheme, setUpsellsHidden, showListTop } from "../page/site";
 import { SampleStore } from "./sampleStore";
 import { runSearch } from "./search";
 import { useSampleActions } from "./hooks/useSampleActions";
 import { useSpliceSite } from "./hooks/useSpliceSite";
 import { useToasts } from "./hooks/useToasts";
+import { useSettings } from "./useSettings";
 import NowPlaying from "./components/NowPlaying";
-import PageStepper from "./components/PageStepper";
 import ToastStack from "./components/ToastStack";
-import Panel, { SearchCommand } from "./Panel";
+import Panel from "./Panel";
 
 /**
- * The panel's outermost piece: whether it is open, the commands the rest of the
- * extension sends it (the toolbar button, the keyboard shortcut and the context
- * menu all arrive here), and everything that has to outlive it -- the sample
- * cache, the toasts, and what splice.com itself is playing.
+ * Everything Splicedd puts on a splice.com page, and the little that outlives
+ * it: the sample cache, the toasts, and what the page itself is doing.
+ *
+ * The panel holds the settings and nothing else. The extension's actual work
+ * happens on Splice's own markup -- its rows carry the buttons, and its listing
+ * is the listing.
  */
 export default function App({ host }: { host: HTMLElement }) {
   const settings = useSettings();
-  const [open, setOpen] = useState(settings.openOnLoad);
-  const [showSettings, setShowSettings] = useState(false);
-  const [command, setCommand] = useState<SearchCommand | null>(null);
+  const [open, setOpen] = useState(false);
 
   // The cache outlives the panel, so closing and reopening doesn't throw away
   // everything that was already downloaded.
@@ -49,11 +47,9 @@ export default function App({ host }: { host: HTMLElement }) {
 
   // And knowing what the page holds is what lets Splice's own download and drag
   // buttons do Splicedd's work. A row the page never fetched -- Splice renders
-  // its first page on the server -- is looked up with a search of our own.
+  // its listings on the server -- is looked up with a search of our own.
   const resolver = useMemo(() => new SampleResolver(page.index, runSearch), [page]);
 
-  // Splice paginates at the foot of a very long list; this offers the same
-  // movement from where the samples actually are.
   const pager = useMemo(() => new Pager(), []);
   useEffect(() => pager.start(), [pager]);
   const pages = useSyncExternalStore(pager.subscribe, pager.current);
@@ -83,6 +79,10 @@ export default function App({ host }: { host: HTMLElement }) {
 
         if (asksBeyondTheFirstPage() && !listing.shows(result.items)) {
           listing.show(result.items);
+
+          // A page turned from the paginator at the foot of a very long list
+          // would otherwise leave the reader at the foot of it.
+          showListTop();
         }
       },
       () => { if (live) injector.refresh(null); }
@@ -93,21 +93,15 @@ export default function App({ host }: { host: HTMLElement }) {
 
   useEffect(() => setUpsellsHidden(settings.hideUpsells), [settings.hideUpsells]);
 
+  // The panel is a guest on Splice's page, and dresses like its host.
+  useEffect(() => followPageTheme(theme => { host.dataset.theme = theme; }), [host]);
+
   useEffect(() => {
     const onCommand = (message: PanelCommand) => {
-      switch (message.kind) {
-        case "toggle-panel":
-          setOpen(x => !x);
-          break;
-        case "settings":
-          setOpen(true);
-          setShowSettings(true);
-          break;
-        case "search":
-          setOpen(true);
-          setShowSettings(false);
-          setCommand({ query: message.query, nonce: Date.now() });
-          break;
+      if (message.kind == "toggle-panel") {
+        setOpen(x => !x);
+      } else {
+        setOpen(true);
       }
     };
 
@@ -115,37 +109,17 @@ export default function App({ host }: { host: HTMLElement }) {
     return () => chrome.runtime.onMessage.removeListener(onCommand);
   }, []);
 
-  useEffect(() => {
-    host.dataset.theme = settings.theme;
-  }, [host, settings.theme]);
-
   return (
     <>
-      {open
-        ? <Panel
-            store={store}
-            actions={actions}
-            toasts={toasts}
-            nowPlaying={nowPlaying}
-            command={command}
-            showSettings={showSettings}
-            onShowSettings={setShowSettings}
-            onClose={() => setOpen(false)}
-          />
-        : <button type="button" className="sd-launcher" onClick={() => setOpen(true)}>
-            <img src={assetUrl("icon-32.png")} alt="" width={18} height={18} />
-            Splicedd
-          </button>}
+      {open && <Panel settings={settings} onClose={() => setOpen(false)} />}
 
       {/* Anchored to the viewport rather than the panel, so a toast still shows
-          when the panel is closed -- a drag from the launcher can fail too. */}
+          when it's closed -- most of the work happens with it closed. */}
       <div className="sd-dock">
         <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
 
-        {!open && nowPlaying != null &&
+        {nowPlaying != null &&
           <NowPlaying sample={nowPlaying} store={store} actions={actions} variant="floating" />}
-
-        {pages != null && <PageStepper state={pages} onTurn={pager.turn} />}
       </div>
     </>
   );

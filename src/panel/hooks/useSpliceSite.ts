@@ -16,7 +16,8 @@ import { errorMessage } from "../../chrome/messages";
 import { SitePlayer } from "../../page/player";
 import { SampleResolver } from "../../page/resolver";
 import {
-  ROW_MARK, SITE_STYLES, SiteRow, controlOf, markRow, pageRequestedBy, playedBy, rowOf
+  ROW_MARK, SITE_STYLES, SiteRow, controlOf, markRow, menuToggledBy, pageRequestedBy,
+  permalinkOf, playedBy, rowOf, sharedBy
 } from "../../page/site";
 import { SampleStore } from "../sampleStore";
 import { SampleActions } from "./useSampleActions";
@@ -98,6 +99,39 @@ export function useSpliceSite(
       event.preventDefault();
       event.stopPropagation();
       openPage(requested);
+
+      return;
+    }
+
+    // A drawn row is a copy of Splice's markup and none of its behaviour, so
+    // the things Splice would have handled are handled here.
+    const menu = menuToggledBy(event.target);
+
+    if (menu != null) {
+      event.preventDefault();
+      event.stopPropagation();
+      menu.toggleAttribute("data-splicedd-open");
+
+      return;
+    }
+
+    const shared = sharedBy(event.target);
+
+    if (shared != null) {
+      const link = permalinkOf(shared);
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (link == null) {
+        toasts.show("Splice hasn't given this sample a link", { tone: "error" });
+        return;
+      }
+
+      void navigator.clipboard.writeText(link).then(
+        () => toasts.show("Link copied"),
+        err => toasts.show(`Couldn't copy the link: ${errorMessage(err)}`, { tone: "error" })
+      );
 
       return;
     }

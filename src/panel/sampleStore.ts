@@ -132,14 +132,14 @@ export class SampleStore {
   }
 
   private async render(entry: CacheEntry, sample: SpliceSample): Promise<SampleFile> {
-    const { format, trimEncoderDelay } = this.settings();
+    const { format } = this.settings();
 
     const mime = MIME_TYPES[format];
     const path = this.pathOf(sample);
 
     // A sample already in the library is the sample. Reading it back skips the
     // download and the conversion, and hands the DAW the very file on disk.
-    const bytes = await folderFile(path) ?? await this.encode(entry, sample, format, trimEncoderDelay);
+    const bytes = await folderFile(path) ?? await this.encode(entry, sample, format);
 
     return {
       bytes,
@@ -152,15 +152,14 @@ export class SampleStore {
 
   /** Where the sample belongs in a library, under the current settings. */
   private pathOf(sample: SpliceSample) {
-    const { format, organizeByPack } = this.settings();
-    return samplePath(sample, { organizeByPack, extension: format });
+    return samplePath(sample, { extension: this.settings().format });
   }
 
-  private async encode(entry: CacheEntry, sample: SpliceSample, format: "wav" | "mp3", trim: boolean) {
+  private async encode(entry: CacheEntry, sample: SpliceSample, format: "wav" | "mp3") {
     const mp3 = await this.audio(entry, sample);
 
     return format == "wav"
-      ? await mp3ToWav(mp3, { durationMs: sample.duration, trimEncoderDelay: trim })
+      ? await mp3ToWav(mp3, { durationMs: sample.duration, trimEncoderDelay: true })
       : mp3;
   }
 
@@ -183,8 +182,7 @@ export class SampleStore {
 
   /** Files rendered under different settings are different files. */
   private renderKey() {
-    const { format, trimEncoderDelay, organizeByPack } = this.settings();
-    return [format, trimEncoderDelay, organizeByPack].join(" ");
+    return this.settings().format;
   }
 
   private track(entry: CacheEntry, blob: Blob) {

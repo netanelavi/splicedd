@@ -53,6 +53,7 @@
   },
   "permissions": [
     "storage",
+    "clipboardWrite",
     "downloads",
     "offscreen",
     "contextMenus",

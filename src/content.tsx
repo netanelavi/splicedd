@@ -42,6 +42,10 @@ async function mount() {
   // ancestor would otherwise anchor the panel's fixed positioning to itself.
   document.documentElement.append(host);
 
+  // Says Splicedd is running on this page, for anything that needs to know --
+  // its own stylesheet included, since the panel is no longer always visible.
+  document.documentElement.dataset.splicedd = "on";
+
   createRoot(container).render(<App host={host} />);
 }
 

@@ -1,36 +1,22 @@
 // User settings, persisted in chrome.storage.sync so they follow the user
 // between machines. Loaded once before the panel mounts, then kept in sync with
 // every other splice.com tab through the storage change event.
+//
+// There are few of them on purpose. Everything the desktop app did one way and
+// the reader never changed is simply done that way: a sample goes in a folder
+// named after its pack, the encoder delay is trimmed, and dragging a sample
+// puts it in the library. Each of those was a switch nobody had a reason to
+// turn off, and a switch nobody turns off is a setting that shouldn't exist.
+
+/** Where a sample library goes when the reader hasn't chosen a folder. */
+export const DOWNLOADS_FOLDER = "Splicedd";
 
 export interface SpliceddSettings {
-  /** Folder under the browser's download directory samples are saved to. */
-  downloadDir: string;
-
-  /** Whether to nest downloads in a per-pack folder, like the desktop app does. */
-  organizeByPack: boolean;
-
   /**
    * `wav` converts the preview to a 16-bit WAV (what DAWs and the desktop app
    * expect); `mp3` saves the decoded preview as-is, which is faster and smaller.
    */
   format: "wav" | "mp3";
-
-  /** Trims the silent samples MP3 encoders prepend, so loops start on the beat. */
-  trimEncoderDelay: boolean;
-
-  /** Whether dragging a sample also saves it to the download folder. */
-  saveOnDrag: boolean;
-
-  theme: "dark" | "light";
-
-  /** Width of the docked panel, in pixels. */
-  panelWidth: number;
-
-  /** Results per search page (Splice's own limit). */
-  resultsPerPage: number;
-
-  /** Whether the panel opens by itself when a splice.com page loads. */
-  openOnLoad: boolean;
 
   /**
    * Whether to take down the offers to subscribe that a logged-out Splice page
@@ -44,15 +30,7 @@ export interface SpliceddSettings {
 }
 
 export const DEFAULT_SETTINGS: SpliceddSettings = {
-  downloadDir: "Splicedd",
-  organizeByPack: true,
   format: "wav",
-  trimEncoderDelay: true,
-  saveOnDrag: true,
-  theme: "dark",
-  panelWidth: 560,
-  resultsPerPage: 50,
-  openOnLoad: false,
   hideUpsells: true,
   blockAnalytics: true
 };

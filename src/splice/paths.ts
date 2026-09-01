@@ -21,9 +21,6 @@ export function sanitizePathSegment(segment: string) {
 }
 
 export interface SamplePathOptions {
-  /** Nests the sample in a folder named after the pack it belongs to. Defaults to `true`. */
-  organizeByPack?: boolean;
-
   /** Replaces the sample's own file extension, e.g. `"wav"`. */
   extension?: string;
 }
@@ -35,17 +32,14 @@ export interface SamplePathOptions {
  * themselves contain directories, which are preserved.
  */
 export function samplePath(sample: SpliceSample, options: SamplePathOptions = {}) {
-  const { organizeByPack = true, extension } = options;
+  const { extension } = options;
 
   const pack = sample.parents?.items?.[0];
   const name = extension == null
     ? sample.name
     : sample.name.replace(/(\.[^./]*)?$/, `.${extension}`);
 
-  return joinPath(
-    ...(organizeByPack && pack != null ? [pack.name] : []),
-    ...name.split("/")
-  );
+  return joinPath(...(pack == null ? [] : [pack.name]), ...name.split("/"));
 }
 
 /** Joins path segments, making each one safe to write to disk. */

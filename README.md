@@ -3,8 +3,9 @@
 # Splicedd
 
 **Splicedd** is a Chrome extension that makes [splice.com](https://splice.com/features/sounds) work the way
-you want it to. Splice's own download button and *Drag to DAW* handle start doing the real thing, on
-Splice's own pages — and a panel is there too, with every sort and filter Splice's API understands.
+you want it to. It adds nothing to look at: Splice's own rows get a download button and a *Drag to DAW*
+handle that do the real thing, its listing gets a paginator that actually pages, and its sign-up prompts
+and analytics go away. The only window of Splicedd's own holds four settings.
 
 It needs no account of its own and no desktop app. Because it runs inside the Splice page, its requests
 are the same ones the site makes, so nothing has to be worked around.
@@ -39,11 +40,8 @@ are the same ones the site makes, so nothing has to be worked around.
   folder of their own — where the browser gets the last word on the name.
 - **Decodes what Splice serves.** Previews are scrambled; Splicedd unscrambles them and converts the
   result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
-- **Every sort and filter.** Relevance, popularity, recency and random, ascending or descending, plus
-  instruments, genres, tags, key and scale, exact or range BPM, one-shots or loops, and per-pack filtering.
-- **Preview with waveforms.** Click a waveform to seek. Playing one sample stops the last.
-- **Right-click any sample name** on splice.com and pick *Find "..." with Splicedd*, or right-click the
-  toolbar icon for *Splicedd settings* — which opens splice.com if you aren't there yet, and lands on them.
+- **Right-click the toolbar icon** for *Splicedd settings* — which opens splice.com if you aren't there
+  yet, and lands on them. The toolbar icon itself, or <kbd>Alt</kbd>+<kbd>S</kbd>, does the same.
 
 ## Installing
 
@@ -56,27 +54,23 @@ yarn build
 
 1. Open `chrome://extensions` and turn on **Developer mode**.
 2. Choose **Load unpacked** and pick the `dist/` folder.
-3. Open [splice.com](https://splice.com/sounds/search/samples). The Splicedd tab appears on the right edge —
-   click it, press <kbd>Alt</kbd>+<kbd>S</kbd>, or click the toolbar icon.
+3. Open [splice.com](https://splice.com/sounds/search/samples). The rows carry the new buttons straight
+   away; the settings are behind the toolbar icon, or <kbd>Alt</kbd>+<kbd>S</kbd>.
 
 Works in any Chromium browser with Manifest V3 support: Chrome, Edge, Brave, Opera, Arc.
 
 ## Settings
 
-The gear in the panel header holds:
+There are four, and that is the point — anything the desktop app did one way and nobody ever changed is
+simply done that way. Samples go in a folder named after their pack, the encoder delay is trimmed, and a
+dragged sample joins the library. How many rows a page holds is chosen on Splice's page, where it belongs.
 
 | Setting | What it does |
 |---|---|
-| Save samples to | A folder you pick. Splicedd writes into it directly, so names and folders are exact. |
-| Folder in your downloads | Only used when no folder is chosen, since your downloads hold everything else too. |
-| Folder per pack | Groups samples by the pack they came from. |
+| Save samples to | A folder you pick. Splicedd writes into it directly, so names and folders are exact. Without one, `Downloads/Splicedd`. |
 | Format | `WAV` (16-bit, what DAWs want) or `MP3` exactly as Splice encoded it. |
-| Trim encoder delay | Drops the silence MP3 encoders prepend, so loops start on the beat. |
-| Save when dragging | Also keeps a copy on disk whenever a sample is dragged out. |
-| Open with splice.com | Shows the panel as soon as a Splice page loads. |
 | Hide the upsells | Takes down Splice's subscribe prompts. Off keeps the licence buttons. |
 | Block analytics | Stops splice.com reporting what you browse and play to its trackers. |
-| Results, theme | Page size, and light or dark. |
 
 ## How it works
 
@@ -85,11 +79,10 @@ splice.com page
 ├── tap.js ── in the page's own JavaScript world
 │     └── wraps fetch, and forwards a copy of what Splice asks for
 │
-├── content.js ── the panel, in a shadow root
+├── content.js ── the work, plus a settings panel in a shadow root
 │     ├── adds a download button and a drag handle to every row
 │     ├── draws the pages Splice won't serve, in Splice's own markup
 │     ├── names the sample the page is playing, from what the tap saw
-│     ├── searches Splice's GraphQL API from the page itself
 │     ├── unscrambles previews and converts them to WAV (Web Audio)
 │     └── attaches the file to the drag as a Chromium `DownloadURL`
 │
@@ -139,7 +132,7 @@ Source layout:
 | `src/splice/` | The Splice domain, free of any browser-extension concern: the search API and its filters, reading samples out of a response, the preview decoder, MP3-to-WAV conversion, sample paths. |
 | `src/page/` | splice.com itself: the tap that watches its requests from the page's own world, the index of what it has been sent, the one module that knows its markup, and what Splicedd adds to it — the row buttons, the paginator, the listing it draws and the player behind it. |
 | `src/chrome/` | The extension platform: settings, messaging, network access, and the folder samples are written to. |
-| `src/panel/` | The React panel injected into splice.com. |
+| `src/panel/` | What runs in the page: the sample cache, the actions on a sample, and the settings panel. |
 | `src/background.ts`, `src/offscreen.ts`, `src/content.tsx`, `src/page/tap.ts` | The four entry points the manifest names. |
 
 ## Permissions, and why

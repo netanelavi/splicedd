@@ -1,15 +1,10 @@
-// Walks splice.com's result pages.
+// Follows which listing splice.com is showing, and moves between them.
 //
-// Splice paginates at the very bottom of a long list, which is the wrong end of
-// the page from where the samples are. This exposes the same movement as a
-// control that stays put, and reports where the page currently is.
-//
-// Turning a page follows Splice's own link when it has one, so its router stays
-// in charge and the page changes exactly as it would have. When it doesn't --
-// nothing says every listing has a paginator -- Splicedd walks the address
-// itself, which is the same `?page=` Splice's own links carry.
+// Splice's server answers a logged-out `?page=` with the first page every time,
+// so a page is turned by writing the address into the history and drawing the
+// answer -- reloading would only undo it.
 
-import { ADDED, hasRows, pageLink, pageSummary } from "./site";
+import { hasRows, pageSummary } from "./site";
 
 export interface PageState {
   page: number;
@@ -17,14 +12,9 @@ export interface PageState {
   /** Which listing this is: its address, minus anything that doesn't select. */
   search: string;
 
-  /** Splice's own wording for where the page is, when it offers one. */
+  /** What the paginator says about where the page is, when there is one. */
   summary: string | null;
-
-  hasPrev: boolean;
-  hasNext: boolean;
 }
-
-export type PageDirection = "prev" | "next";
 
 const PAGE_PARAM = "page";
 
@@ -59,32 +49,7 @@ export class Pager {
     return () => { this.listeners.delete(listener); };
   };
 
-  readonly turn = (direction: PageDirection) => {
-    const link = pageLink(direction);
-
-    // Splice's own link belongs to Splice's own router; Splicedd's belongs to
-    // Splicedd, which draws the page rather than asking the server for it.
-    if (link != null) {
-      link.closest(`[${ADDED}]`) == null ? link.click() : this.open(link.href);
-      return;
-    }
-
-    const page = currentPage() + (direction == "next" ? 1 : -1);
-
-    if (page >= 1) {
-      const url = new URL(window.location.href);
-      url.searchParams.set(PAGE_PARAM, page.toString());
-
-      this.open(url.href);
-    }
-  };
-
-  /**
-   * Moves to another page of the same search without leaving the document.
-   * Splice's server answers `?page=` on a logged-out search with the first page
-   * every time, so reloading would undo the move; the address is written into
-   * the history instead, and the listing is drawn from what the API returns.
-   */
+  /** Moves to another page of the same search, without leaving the document. */
   readonly open = (href: string) => {
     window.history.pushState(null, "", href);
     this.schedule();
@@ -115,18 +80,8 @@ function state(): PageState {
   const url = new URL(window.location.href);
   const page = currentPage();
   const summary = pageSummary();
-  const total = totalPages(summary);
 
-  return {
-    page,
-    search: `${url.pathname}?${url.searchParams}`,
-    summary,
-    hasPrev: page > 1,
-
-    // A listing with no paginator to read is walked optimistically: asking for
-    // the page after the last one is Splice's to answer, not ours to predict.
-    hasNext: total == null ? true : page < total
-  };
+  return { page, search: `${url.pathname}?${url.searchParams}`, summary };
 }
 
 function currentPage() {
@@ -134,16 +89,10 @@ function currentPage() {
   return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
-function totalPages(summary: string | null) {
-  const total = summary?.match(/\d+\s*(?:of|\/)\s*(\d+)/i)?.[1];
-  return total == null ? null : parseInt(total, 10);
-}
-
 function same(a: PageState | null, b: PageState | null) {
   if (a == null || b == null) {
     return a == b;
   }
 
-  return a.page == b.page && a.search == b.search && a.summary == b.summary &&
-    a.hasPrev == b.hasPrev && a.hasNext == b.hasNext;
+  return a.page == b.page && a.search == b.search && a.summary == b.summary;
 }

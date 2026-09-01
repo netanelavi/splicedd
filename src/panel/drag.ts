@@ -14,9 +14,9 @@ export function attachFileDrag(transfer: DataTransfer, file: SampleFile) {
   transfer.effectAllowed = "copy";
   transfer.setData("DownloadURL", `${file.mime}:${file.name}:${file.url}`);
 
-  // Drop targets that don't speak DownloadURL (a text field, another tab) still
-  // get something meaningful.
-  transfer.setData("text/uri-list", file.url);
+  // Only the name goes alongside it. Offering the blob URL as `text/uri-list`
+  // would look helpful and be the opposite: a drop target that reads that
+  // first fetches the blob and names the file after it, which is an id.
   transfer.setData("text/plain", file.name);
 }
 

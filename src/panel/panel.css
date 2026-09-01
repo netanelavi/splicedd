@@ -1023,3 +1023,14 @@ button, input, select, textarea {
   text-transform: uppercase;
   color: var(--sd-accent);
 }
+
+.sd-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}

@@ -32,7 +32,9 @@ are the same ones the site makes, so nothing has to be worked around.
 - **Follows Splice's own player.** Play anything on splice.com — a pack page, a rail, the search you were
   already using — and a card appears with that sample, ready to drag or download. Splicedd reads it out of
   the responses Splice already sent the page, so it costs no request of its own.
-- **Download.** One click saves a sample under your download folder, in a folder per pack.
+- **Saves where you say, under its own name.** Point Splicedd at a folder once and every sample is written
+  straight into it, keeping the name Splice gave it, in a folder per pack. Without one, files go to the
+  browser's download folder — where the browser gets the last word on the name.
 - **Decodes what Splice serves.** Previews are scrambled; Splicedd unscrambles them and converts the
   result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
 - **Every sort and filter.** Relevance, popularity, recency and random, ascending or descending, plus
@@ -62,7 +64,8 @@ The gear in the panel header holds:
 
 | Setting | What it does |
 |---|---|
-| Download folder | Folder under your browser's download directory. Empty saves samples directly there. |
+| Save samples to | A folder you pick. Splicedd writes into it directly, so names and folders are exact. |
+| Subfolder | Nested inside it. Empty saves samples there directly. |
 | Folder per pack | Groups samples by the pack they came from. |
 | Format | `WAV` (16-bit, what DAWs want) or `MP3` exactly as Splice encoded it. |
 | Trim encoder delay | Drops the silence MP3 encoders prepend, so loops start on the beat. |
@@ -127,7 +130,7 @@ Source layout:
 |---|---|
 | `src/splice/` | The Splice domain, free of any browser-extension concern: the search API and its filters, reading samples out of a response, the preview decoder, MP3-to-WAV conversion, sample paths. |
 | `src/page/` | splice.com itself: the tap that watches its requests from the page's own world, the index of what it has been sent, the one module that knows its markup, and what Splicedd adds to it — the row buttons, the paginator, the listing it draws and the player behind it. |
-| `src/chrome/` | The extension platform: settings, messaging, and network access. |
+| `src/chrome/` | The extension platform: settings, messaging, network access, and the folder samples are written to. |
 | `src/panel/` | The React panel injected into splice.com. |
 | `src/background.ts`, `src/offscreen.ts`, `src/content.tsx`, `src/page/tap.ts` | The four entry points the manifest names. |
 

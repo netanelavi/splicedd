@@ -1,8 +1,10 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { FolderOpen, Palette, Rows3 } from "lucide-react";
 
+import { canChooseFolder, chooseFolder, folderName, forgetFolder } from "../../chrome/folder";
+import { errorMessage } from "../../chrome/messages";
 import { SpliceddSettings, mutateSettings } from "../../chrome/settings";
-import { Select, Switch } from "./primitives";
+import { Button, Select, Switch } from "./primitives";
 
 const FORMATS = [
   { value: "wav" as const, label: "WAV (16-bit)" },
@@ -40,21 +42,23 @@ export default function SettingsView({ settings }: { settings: SpliceddSettings 
 
   return (
     <div className="sd-settings">
+      <FolderSetting />
+
       <div>
-        <span className="sd-label">Download folder</span>
+        <span className="sd-label">Subfolder</span>
         <div className="sd-field" style={{ marginTop: 6, height: 34 }}>
           <FolderOpen size={15} aria-hidden />
           <input
             className="sd-text-input"
             style={{ border: "none", background: "none", height: "auto", padding: 0 }}
-            aria-label="Download folder"
+            aria-label="Subfolder"
             value={settings.downloadDir}
             placeholder="Splicedd"
             onChange={ev => set("downloadDir", ev.target.value)}
           />
         </div>
         <p className="sd-hint" style={{ marginTop: 6 }}>
-          Relative to the folder your browser downloads to. Leave it empty to save samples there directly.
+          Nested inside the folder above. Leave it empty to save samples there directly.
         </p>
       </div>
 
@@ -110,6 +114,66 @@ export default function SettingsView({ settings }: { settings: SpliceddSettings 
       <p className="sd-hint">
         Drag a sample straight from the list into your DAW's arrangement or browser. Chromium writes the file out
         as it lands, and a copy stays in your download folder while "Save when dragging" is on.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The folder samples are written into. Picking one hands Splicedd a handle to
+ * write through, which is what keeps a sample's own name and place; without
+ * one, files go to the browser's download folder and the browser names them.
+ */
+function FolderSetting() {
+  const [folder, setFolder] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { void folderName().then(setFolder); }, []);
+
+  async function choose() {
+    setError(null);
+
+    try {
+      const chosen = await chooseFolder();
+
+      if (chosen != null) {
+        setFolder(chosen);
+      }
+    } catch (err) {
+      // Dismissing the picker is an abort, and is not worth reporting.
+      if (!(err instanceof DOMException && err.name == "AbortError")) {
+        setError(errorMessage(err));
+      }
+    }
+  }
+
+  async function clear() {
+    await forgetFolder();
+    setFolder(null);
+  }
+
+  return (
+    <div>
+      <span className="sd-label">Save samples to</span>
+
+      <div className="sd-row-between" style={{ marginTop: 6 }}>
+        <span className="sd-folder">
+          <FolderOpen size={15} aria-hidden />
+          {folder ?? "Your browser's downloads"}
+        </span>
+
+        {canChooseFolder() &&
+          <span style={{ display: "flex", gap: 4 }}>
+            {folder != null && <Button variant="link" onClick={() => void clear()}>Clear</Button>}
+            <Button variant="ghost" onClick={() => void choose()}>Choose...</Button>
+          </span>}
+      </div>
+
+      <p className="sd-hint" style={{ marginTop: 6 }}>
+        {error ?? (folder != null
+          ? "Samples are written straight into this folder, keeping their own names."
+          : "Pick a folder and samples are written into it with their own names, rather than " +
+            "landing in your downloads under a name the browser chooses.")}
       </p>
     </div>
   );

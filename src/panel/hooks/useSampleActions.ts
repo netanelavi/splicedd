@@ -3,6 +3,7 @@ import { DragEvent, useCallback, useRef, useState } from "react";
 import { SpliceSample } from "../../splice/api";
 import { errorMessage } from "../../chrome/messages";
 import { callWorker } from "../../chrome/messages";
+import { ensureFolderAccess, saveToFolder } from "../../chrome/folder";
 import { saveFile } from "../../chrome/net";
 import { settings } from "../../chrome/settings";
 import { SampleFile, SampleStore } from "../sampleStore";
@@ -64,6 +65,18 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
 
   const save = useCallback(async (file: SampleFile, announce: boolean) => {
     try {
+      // A folder the reader chose is written to directly, which is the only way
+      // the file keeps the name and the place it was given.
+      const written = await saveToFolder(file.path, file.bytes);
+
+      if (written != null) {
+        if (announce) {
+          toasts.show(`Saved ${written}`);
+        }
+
+        return;
+      }
+
       const saved = await saveFile(file.bytes, file.mime, file.path);
 
       if (announce) {
@@ -89,6 +102,10 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     if (downloading.current.has(sample.uuid)) {
       return;
     }
+
+    // Before anything is awaited: re-asking for a folder the browser has
+    // forgotten only works while the click that started this still counts.
+    void ensureFolderAccess();
 
     downloading.current.add(sample.uuid);
 

@@ -96,6 +96,17 @@ export default function SettingsView({ settings }: { settings: SpliceddSettings 
         <Switch label="Hide the upsells" checked={settings.hideUpsells} onChange={x => set("hideUpsells", x)} />
       </Setting>
 
+      <Setting
+        title="Block analytics"
+        description="Stops splice.com reporting what you browse and play to its trackers."
+      >
+        <Switch
+          label="Block analytics"
+          checked={settings.blockAnalytics}
+          onChange={x => set("blockAnalytics", x)}
+        />
+      </Setting>
+
       <Setting title="Results" description="How many samples each search page holds.">
         <Select
           icon={Rows3} label="Results per page"
@@ -115,6 +126,8 @@ export default function SettingsView({ settings }: { settings: SpliceddSettings 
         Drag a sample straight from the list into your DAW's arrangement or browser. Chromium writes the file out
         as it lands, and a copy stays in your download folder while "Save when dragging" is on.
       </p>
+
+      <p className="sd-hint" style={{ opacity: 0.7 }}>Build {__BUILD__}</p>
     </div>
   );
 }

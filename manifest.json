@@ -56,7 +56,8 @@
     "downloads",
     "offscreen",
     "contextMenus",
-    "scripting"
+    "scripting",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "https://splice.com/*",
@@ -73,5 +74,14 @@
         "https://www.splice.com/*"
       ]
     }
-  ]
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "analytics",
+        "enabled": true,
+        "path": "rules/analytics.json"
+      }
+    ]
+  }
 }

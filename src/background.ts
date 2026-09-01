@@ -10,6 +10,7 @@ import {
   OffscreenJob, OffscreenReply, OffscreenRequest, PanelCommand, SavedFile,
   WorkerRequest, WorkerReply, respondAsync, sendRequest
 } from "./chrome/messages";
+import { loadSettings, onSettingsChanged, settings } from "./chrome/settings";
 import { GRAPHQL_URL } from "./splice/api";
 
 const SPLICE_TAB_URLS = ["https://splice.com/*", "https://www.splice.com/*"];
@@ -29,6 +30,34 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.action.onClicked.addListener(tab => {
   void commandPanel(tab, { kind: "toggle-panel" });
+});
+
+// --- keeping splice.com's analytics off ---
+//
+// A blocking ruleset rather than anything in the page: it covers a beacon sent
+// on unload and a tracking pixel just as well as a `fetch`, and it works before
+// any of Splice's own code runs. The rules are scoped to requests splice.com
+// starts, so nothing else the reader browses is touched.
+
+const ANALYTICS_RULES = "analytics";
+
+async function applyAnalyticsSetting() {
+  const enabled = settings().blockAnalytics;
+
+  try {
+    await chrome.declarativeNetRequest.updateEnabledRulesets(enabled
+      ? { enableRulesetIds: [ANALYTICS_RULES] }
+      : { disableRulesetIds: [ANALYTICS_RULES] });
+  } catch (err) {
+    console.warn("[splicedd] couldn't apply the analytics setting:", err);
+  }
+}
+
+// A service worker is woken and discarded constantly, so the setting is read
+// and applied on each start rather than only when it changes.
+void loadSettings().then(() => {
+  onSettingsChanged(() => void applyAnalyticsSetting());
+  return applyAnalyticsSetting();
 });
 
 chrome.commands.onCommand.addListener((command, tab) => {

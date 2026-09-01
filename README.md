@@ -72,6 +72,7 @@ The gear in the panel header holds:
 | Save when dragging | Also keeps a copy on disk whenever a sample is dragged out. |
 | Open with splice.com | Shows the panel as soon as a Splice page loads. |
 | Hide the upsells | Takes down Splice's subscribe prompts. Off keeps the licence buttons. |
+| Block analytics | Stops splice.com reporting what you browse and play to its trackers. |
 | Results, theme | Page size, and light or dark. |
 
 ## How it works
@@ -113,7 +114,11 @@ Five details are worth knowing:
 - **A drag payload must be attached synchronously**, so a sample is converted while you hover and press
   the mouse, before the drag begins. If you beat it to it, the panel says so and the next drag works.
 - **Nothing leaves your browser.** There's no server, no analytics, no account. The extension talks to
-  Splice and to your download folder, and that's all.
+  Splice and to your download folder, and that's all — and with *Block analytics* on, Splice's own
+  trackers don't get to talk either. That's a `declarativeNetRequest` ruleset rather than anything in the
+  page, so it covers a beacon sent on unload and a tracking pixel as well as a `fetch`, and it runs before
+  any of Splice's code does. Every rule is scoped to requests splice.com starts; nothing else you browse
+  is touched.
 
 ## Development
 
@@ -143,6 +148,7 @@ Source layout:
 | `storage` | Your settings. |
 | `offscreen` | Building the blob a download needs; a service worker can't. |
 | `contextMenus`, `scripting` | The right-click search, and reaching tabs opened before the extension was installed. |
+| `declarativeNetRequest` | Blocking splice.com's analytics. Block rules need no access to the hosts they block, and none is asked for. |
 
 Splicedd downloads the same public preview files splice.com plays in your browser. Previews are not
 licensed sample files: if a sample makes it into something you release, license it on Splice.

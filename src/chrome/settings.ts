@@ -2,8 +2,6 @@
 // between machines. Loaded once before the panel mounts, then kept in sync with
 // every other splice.com tab through the storage change event.
 
-import { useSyncExternalStore } from "react";
-
 export interface SpliceddSettings {
   /** Folder under the browser's download directory samples are saved to. */
   downloadDir: string;
@@ -40,6 +38,9 @@ export interface SpliceddSettings {
    * the licence button on a row is how a sample is actually bought.
    */
   hideUpsells: boolean;
+
+  /** Whether to stop splice.com's pages reporting what you do to analytics. */
+  blockAnalytics: boolean;
 }
 
 export const DEFAULT_SETTINGS: SpliceddSettings = {
@@ -52,7 +53,8 @@ export const DEFAULT_SETTINGS: SpliceddSettings = {
   panelWidth: 560,
   resultsPerPage: 50,
   openOnLoad: false,
-  hideUpsells: true
+  hideUpsells: true,
+  blockAnalytics: true
 };
 
 const KEY = "settings";
@@ -101,13 +103,11 @@ export async function mutateSettings(patch: Partial<SpliceddSettings>) {
   }
 }
 
-/** Subscribes a component to the settings object. */
-export function useSettings() {
-  return useSyncExternalStore(
-    listener => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    settings
-  );
+/**
+ * Subscribes to changes. The React binding lives in the panel, so that reading
+ * a setting doesn't oblige the service worker to carry React.
+ */
+export function onSettingsChanged(listener: () => void) {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
 }

@@ -10,6 +10,7 @@
 import { build } from "vite";
 import react from "@vitejs/plugin-react";
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,7 +26,25 @@ const TARGETS = [
   { entry: "src/offscreen.ts", file: "offscreen.js", format: "iife" }
 ];
 
-const STATIC_FILES = ["offscreen.html", "icons"];
+const STATIC_FILES = ["offscreen.html", "icons", "rules"];
+
+/**
+ * Which commit this build came from, shown in the panel. "Did that reach my
+ * browser?" is otherwise unanswerable: every build carries the same version,
+ * and a stale unpacked extension looks exactly like a fresh one.
+ */
+function revision() {
+  try {
+    const sha = execSync("git rev-parse --short HEAD", { cwd: root }).toString().trim();
+    const dirty = execSync("git status --porcelain", { cwd: root }).toString().trim().length > 0;
+
+    return sha + (dirty ? "+" : "");
+  } catch {
+    return "unknown";
+  }
+}
+
+const BUILD = revision();
 
 async function buildTarget({ entry, file, format }) {
   await build({
@@ -34,7 +53,10 @@ async function buildTarget({ entry, file, format }) {
     plugins: [react()],
     // React and its dependencies branch on this; without a definition the
     // bundle would reference a `process` global no page context provides.
-    define: { "process.env.NODE_ENV": JSON.stringify("production") },
+    define: {
+      "process.env.NODE_ENV": JSON.stringify("production"),
+      __BUILD__: JSON.stringify(BUILD)
+    },
     logLevel: "warn",
     build: {
       outDir,
@@ -76,7 +98,7 @@ async function copyStatic() {
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
 
-console.log("building the Splicedd extension into dist/");
+console.log(`building the Splicedd extension into dist/ (${BUILD})`);
 
 for (const target of TARGETS) {
   await buildTarget(target);

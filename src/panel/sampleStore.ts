@@ -8,6 +8,7 @@ import { decodeSpliceAudio } from "../splice/decoder";
 import { previewUrlOf } from "../splice/harvest";
 import { mp3ToWav } from "../splice/audio";
 import { samplePath } from "../splice/paths";
+import { folderFile, folderHas } from "../chrome/folder";
 import { fetchBytes } from "../chrome/net";
 import { SpliceddSettings } from "../chrome/settings";
 
@@ -20,7 +21,7 @@ export interface SampleFile {
 
   mime: string;
 
-  /** Where the file belongs, relative to the download folder. */
+  /** Where the file belongs inside a sample library, e.g. `Pack_Name/kick.wav`. */
   path: string;
 
   /** The file's own name, without any folders. */
@@ -42,8 +43,12 @@ interface Rendering {
 }
 
 interface CacheEntry {
-  /** The unscrambled preview, as Splice encoded it. */
-  mp3: Promise<Bytes>;
+  /**
+   * The unscrambled preview, as Splice encoded it. Fetched the first time
+   * something actually needs it, so a sample already in the library is never
+   * downloaded to be written over itself.
+   */
+  mp3?: Promise<Bytes>;
 
   /** An object URL for the preview, created the first time it is played. */
   previewUrl?: Promise<string>;
@@ -66,14 +71,22 @@ export class SampleStore {
   /** Starts downloading a sample's preview without waiting for it. */
   prefetch(sample: SpliceSample) {
     // Nothing awaits a prefetch; a real request reports the failure itself.
-    void this.entryOf(sample).mp3.catch(() => {});
+    void this.warm(sample).catch(() => {});
+  }
+
+  private async warm(sample: SpliceSample) {
+    const entry = this.entryOf(sample);
+
+    if (entry.mp3 == null && !await folderHas(this.pathOf(sample))) {
+      void this.audio(entry, sample).catch(() => {});
+    }
   }
 
   /** Resolves to an object URL that plays the sample's preview. */
   preview(sample: SpliceSample): Promise<string> {
     const entry = this.entryOf(sample);
 
-    entry.previewUrl ??= entry.mp3.then(mp3 =>
+    entry.previewUrl ??= this.audio(entry, sample).then(mp3 =>
       this.track(entry, new Blob([mp3], { type: MIME_TYPES.mp3 }))
     );
 
@@ -119,15 +132,14 @@ export class SampleStore {
   }
 
   private async render(entry: CacheEntry, sample: SpliceSample): Promise<SampleFile> {
-    const { format, trimEncoderDelay, organizeByPack, downloadDir } = this.settings();
-    const mp3 = await entry.mp3;
-
-    const bytes = format == "wav"
-      ? await mp3ToWav(mp3, { durationMs: sample.duration, trimEncoderDelay })
-      : mp3;
+    const { format, trimEncoderDelay } = this.settings();
 
     const mime = MIME_TYPES[format];
-    const path = samplePath(sample, { organizeByPack, extension: format, prefix: downloadDir });
+    const path = this.pathOf(sample);
+
+    // A sample already in the library is the sample. Reading it back skips the
+    // download and the conversion, and hands the DAW the very file on disk.
+    const bytes = await folderFile(path) ?? await this.encode(entry, sample, format, trimEncoderDelay);
 
     return {
       bytes,
@@ -138,11 +150,30 @@ export class SampleStore {
     };
   }
 
+  /** Where the sample belongs in a library, under the current settings. */
+  private pathOf(sample: SpliceSample) {
+    const { format, organizeByPack } = this.settings();
+    return samplePath(sample, { organizeByPack, extension: format });
+  }
+
+  private async encode(entry: CacheEntry, sample: SpliceSample, format: "wav" | "mp3", trim: boolean) {
+    const mp3 = await this.audio(entry, sample);
+
+    return format == "wav"
+      ? await mp3ToWav(mp3, { durationMs: sample.duration, trimEncoderDelay: trim })
+      : mp3;
+  }
+
+  /** The unscrambled preview, downloaded once however many things want it. */
+  private audio(entry: CacheEntry, sample: SpliceSample) {
+    return entry.mp3 ??= fetchPreview(sample);
+  }
+
   private entryOf(sample: SpliceSample): CacheEntry {
     let entry = this.entries.get(sample.uuid);
 
     if (entry == null) {
-      entry = { mp3: fetchPreview(sample), renderings: new Map(), urls: [] };
+      entry = { renderings: new Map(), urls: [] };
       this.entries.set(sample.uuid, entry);
       this.evictOverflow();
     }
@@ -152,8 +183,8 @@ export class SampleStore {
 
   /** Files rendered under different settings are different files. */
   private renderKey() {
-    const { format, trimEncoderDelay, organizeByPack, downloadDir } = this.settings();
-    return [format, trimEncoderDelay, organizeByPack, downloadDir].join(" ");
+    const { format, trimEncoderDelay, organizeByPack } = this.settings();
+    return [format, trimEncoderDelay, organizeByPack].join(" ");
   }
 
   private track(entry: CacheEntry, blob: Blob) {

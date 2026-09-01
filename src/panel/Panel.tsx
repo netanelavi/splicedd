@@ -31,12 +31,16 @@ export interface SearchCommand {
 }
 
 export default function Panel(
-  { store, actions, toasts, nowPlaying, command, onClose }: {
+  { store, actions, toasts, nowPlaying, command, showSettings, onShowSettings, onClose }: {
     store: SampleStore;
     actions: SampleActions;
     toasts: Toasts;
     nowPlaying: SpliceSample | null;
     command: SearchCommand | null;
+
+    /** Whether the settings are showing, which the toolbar icon can ask for. */
+    showSettings: boolean;
+    onShowSettings: (showing: boolean) => void;
     onClose: () => void;
   }
 ) {
@@ -47,7 +51,6 @@ export default function Panel(
   const [text, setText] = useState("");
   const [pack, setPack] = useState<SpliceSamplePack | null>(null);
   const [tagsExpanded, setTagsExpanded] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
 
   const results = search.results;
   const { refine } = search;
@@ -106,7 +109,7 @@ export default function Panel(
             <IconButton
               label={showSettings ? "Back to search" : "Settings"}
               active={showSettings}
-              onClick={() => setShowSettings(x => !x)}
+              onClick={() => onShowSettings(!showSettings)}
             ><Settings size={17} /></IconButton>
 
             <IconButton label="Close the panel" onClick={onClose}>

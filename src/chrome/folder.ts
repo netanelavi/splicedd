@@ -16,8 +16,9 @@ import { Bytes } from "../bytes";
 type PermissionState = "granted" | "denied" | "prompt";
 
 interface HandlePermission {
-  queryPermission(descriptor: { mode: "readwrite" }): Promise<PermissionState>;
-  requestPermission(descriptor: { mode: "readwrite" }): Promise<PermissionState>;
+  /** Absent on a handle that needs no permission of its own. */
+  queryPermission?(descriptor: { mode: "readwrite" }): Promise<PermissionState>;
+  requestPermission?(descriptor: { mode: "readwrite" }): Promise<PermissionState>;
 }
 
 interface DirectoryHandle extends HandlePermission {
@@ -27,6 +28,7 @@ interface DirectoryHandle extends HandlePermission {
 }
 
 interface FileHandle {
+  getFile(): Promise<File>;
   createWritable(): Promise<WritableStream & { write(data: BufferSource): Promise<void> }>;
 }
 
@@ -87,25 +89,106 @@ export async function ensureFolderAccess(): Promise<boolean> {
     return false;
   }
 
-  if (await handle.queryPermission({ mode: "readwrite" }) == "granted") {
+  if (await writable(handle)) {
     return true;
   }
 
-  return await handle.requestPermission({ mode: "readwrite" }) == "granted";
+  return await handle.requestPermission?.({ mode: "readwrite" }) == "granted";
+}
+
+/** A handle with no permission API of its own is one that needs no permission. */
+async function writable(handle: HandlePermission) {
+  return handle.queryPermission == null ||
+    await handle.queryPermission({ mode: "readwrite" }) == "granted";
+}
+
+/** A sample already in the library, which is the sample. */
+export interface SavedSample {
+  /** Where it sits, for telling the reader. */
+  path: string;
+
+  /** Whether it was already there, rather than written now. */
+  existed: boolean;
 }
 
 /**
  * Writes a sample into the chosen folder, creating the folders along the way,
  * and answers with where it went -- or null if no folder is available, which is
  * the caller's cue to fall back to the browser's download folder.
+ *
+ * A sample already in the library is left exactly as it is. The one on disk may
+ * have been edited, renamed into place, or simply be the same bytes; none of
+ * those is improved by writing over it.
  */
-export async function saveToFolder(path: string, bytes: Bytes): Promise<string | null> {
+export async function saveToFolder(path: string, bytes: Bytes): Promise<SavedSample | null> {
   const root = await get();
 
-  if (root == null || await root.queryPermission({ mode: "readwrite" }) != "granted") {
+  if (root == null || !await writable(root)) {
     return null;
   }
 
+  const where = `${root.name}/${path}`;
+
+  if (await folderHas(path)) {
+    return { path: where, existed: true };
+  }
+
+  const folder = await walk(root, path, { create: true });
+
+  if (folder == null) {
+    return null;
+  }
+
+  const file = await folder.directory.getFileHandle(folder.name, { create: true });
+  const stream = await file.createWritable();
+
+  try {
+    await stream.write(bytes);
+  } finally {
+    await stream.close();
+  }
+
+  return { path: where, existed: false };
+}
+
+/** Whether the chosen folder already holds a sample at the given path. */
+export async function folderHas(path: string): Promise<boolean> {
+  return await handleFor(path) != null;
+}
+
+/**
+ * A sample already in the library, read back rather than fetched again. The
+ * file on disk is the one the reader has; downloading a second copy of it would
+ * be work nobody asked for.
+ */
+export async function folderFile(path: string): Promise<Bytes | null> {
+  const file = await handleFor(path);
+
+  if (file == null) {
+    return null;
+  }
+
+  return new Uint8Array(await (await file.getFile()).arrayBuffer());
+}
+
+async function handleFor(path: string): Promise<FileHandle | null> {
+  const root = await get();
+
+  if (root == null || !await writable(root)) {
+    return null;
+  }
+
+  try {
+    const folder = await walk(root, path, { create: false });
+    return folder == null ? null : await folder.directory.getFileHandle(folder.name);
+  } catch {
+    // NotFoundError, which is the answer rather than a failure.
+    return null;
+  }
+}
+
+/** Follows a path down to the folder its file belongs in. */
+async function walk(root: DirectoryHandle, path: string, options: { create: boolean }) {
   const segments = path.split("/").filter(x => x.length > 0);
   const name = segments.pop();
 
@@ -113,22 +196,13 @@ export async function saveToFolder(path: string, bytes: Bytes): Promise<string |
     return null;
   }
 
-  let folder = root;
+  let directory = root;
 
   for (const segment of segments) {
-    folder = await folder.getDirectoryHandle(segment, { create: true });
+    directory = await directory.getDirectoryHandle(segment, options);
   }
 
-  const file = await folder.getFileHandle(name, { create: true });
-  const writable = await file.createWritable();
-
-  try {
-    await writable.write(bytes);
-  } finally {
-    await writable.close();
-  }
-
-  return `${root.name}/${path}`;
+  return { directory, name };
 }
 
 // --- where the handle is kept ---

@@ -1,6 +1,20 @@
 import { DragEvent } from "react";
 
+import { assetUrl } from "../chrome/assets";
 import { SampleFile } from "./sampleStore";
+
+/**
+ * What sits under the cursor while a sample is dragged. Chromium's default is a
+ * ghost of whatever was grabbed, which for a small button is a small button --
+ * and on Splice's own rows says nothing about where the file is coming from.
+ *
+ * Loaded once, up front: `setDragImage` takes the image as it is at the instant
+ * the drag begins, and ignores one that hasn't decoded yet.
+ */
+const ICON_SIZE = 32;
+
+const icon = new Image(ICON_SIZE, ICON_SIZE);
+icon.src = assetUrl("icon-32.png");
 
 /**
  * Hands a file to the operating system for the duration of a drag.
@@ -12,6 +26,11 @@ import { SampleFile } from "./sampleStore";
  */
 export function attachFileDrag(transfer: DataTransfer, file: SampleFile) {
   transfer.effectAllowed = "copy";
+
+  if (icon.complete && icon.naturalWidth > 0) {
+    transfer.setDragImage(icon, ICON_SIZE / 2, ICON_SIZE / 2);
+  }
+
   transfer.setData("DownloadURL", `${file.mime}:${file.name}:${file.url}`);
 
   // Only the name goes alongside it. Offering the blob URL as `text/uri-list`

@@ -16,6 +16,7 @@ import { GRAPHQL_URL } from "./splice/api";
 const SPLICE_TAB_URLS = ["https://splice.com/*", "https://www.splice.com/*"];
 const SPLICE_SOUNDS_URL = "https://splice.com/sounds/search/samples";
 const SEARCH_MENU_ID = "splicedd-search-selection";
+const SETTINGS_MENU_ID = "splicedd-settings";
 
 // --- the toolbar button, the keyboard shortcut and the context menu ---
 
@@ -25,6 +26,14 @@ chrome.runtime.onInstalled.addListener(() => {
     title: 'Find "%s" with Splicedd',
     contexts: ["selection"],
     documentUrlPatterns: SPLICE_TAB_URLS
+  });
+
+  // On the toolbar icon itself, so the settings are reachable from the
+  // extension rather than only from inside a panel that has to be opened first.
+  chrome.contextMenus.create({
+    id: SETTINGS_MENU_ID,
+    title: "Splicedd settings",
+    contexts: ["action"]
   });
 });
 
@@ -67,6 +76,10 @@ chrome.commands.onCommand.addListener((command, tab) => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId == SETTINGS_MENU_ID) {
+    void commandPanel(tab, { kind: "settings" });
+  }
+
   if (info.menuItemId == SEARCH_MENU_ID && info.selectionText != null) {
     void commandPanel(tab, { kind: "search", query: info.selectionText.trim() });
   }
@@ -76,27 +89,52 @@ function isSpliceTab(tab: chrome.tabs.Tab | undefined): tab is chrome.tabs.Tab &
   return tab?.id != null && /^https:\/\/(www\.)?splice\.com\//.test(tab.url ?? "");
 }
 
-/**
- * Delivers a command to the panel in the given tab, opening splice.com first if
- * the user isn't there yet.
- */
-async function commandPanel(tab: chrome.tabs.Tab | undefined, command: PanelCommand) {
-  if (!isSpliceTab(tab)) {
-    await chrome.tabs.create({ url: SPLICE_SOUNDS_URL });
+/** Commands waiting on a splice.com tab that is still loading. */
+const pending = new Map<number, PanelCommand>();
+
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  const command = pending.get(tabId);
+
+  if (command == null || info.status != "complete") {
     return;
   }
 
+  pending.delete(tabId);
+  void deliver(tabId, command);
+});
+
+/**
+ * Delivers a command to the panel in the given tab, opening splice.com first if
+ * the user isn't there yet -- and remembering the command until that tab has
+ * loaded, so asking for the settings from a page that isn't Splice's still ends
+ * up on the settings.
+ */
+async function commandPanel(tab: chrome.tabs.Tab | undefined, command: PanelCommand) {
+  if (!isSpliceTab(tab)) {
+    const opened = await chrome.tabs.create({ url: SPLICE_SOUNDS_URL });
+
+    if (opened.id != null) {
+      pending.set(opened.id, command);
+    }
+
+    return;
+  }
+
+  await deliver(tab.id, command);
+}
+
+async function deliver(tabId: number, command: PanelCommand) {
   try {
-    await chrome.tabs.sendMessage(tab.id, command);
+    await chrome.tabs.sendMessage(tabId, command);
   } catch {
     // The tab predates the extension being installed or updated, so it has no
     // content scripts yet. Injecting them brings it up to date without a
     // reload; the tap picks up from the next request the page makes.
-    const target = { tabId: tab.id };
+    const target = { tabId };
 
     await chrome.scripting.executeScript({ target, files: ["tap.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target, files: ["content.js"] });
-    await chrome.tabs.sendMessage(tab.id, command);
+    await chrome.tabs.sendMessage(tabId, command);
   }
 }
 

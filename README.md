@@ -33,14 +33,17 @@ are the same ones the site makes, so nothing has to be worked around.
   already using — and a card appears with that sample, ready to drag or download. Splicedd reads it out of
   the responses Splice already sent the page, so it costs no request of its own.
 - **Saves where you say, under its own name.** Point Splicedd at a folder once and every sample is written
-  straight into it, keeping the name Splice gave it, in a folder per pack. Without one, files go to the
-  browser's download folder — where the browser gets the last word on the name.
+  straight into it, at exactly the path the desktop app used — `Pack_Name/sample_name.wav`, nested as
+  deeply as the name goes. A sample already there is left alone and reused, so nothing is downloaded,
+  decoded or written twice. Without a chosen folder, files go to the browser's download folder, in a
+  folder of their own — where the browser gets the last word on the name.
 - **Decodes what Splice serves.** Previews are scrambled; Splicedd unscrambles them and converts the
   result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
 - **Every sort and filter.** Relevance, popularity, recency and random, ascending or descending, plus
   instruments, genres, tags, key and scale, exact or range BPM, one-shots or loops, and per-pack filtering.
 - **Preview with waveforms.** Click a waveform to seek. Playing one sample stops the last.
-- **Right-click any sample name** on splice.com and pick *Find "..." with Splicedd*.
+- **Right-click any sample name** on splice.com and pick *Find "..." with Splicedd*, or right-click the
+  toolbar icon for *Splicedd settings* — which opens splice.com if you aren't there yet, and lands on them.
 
 ## Installing
 
@@ -65,7 +68,7 @@ The gear in the panel header holds:
 | Setting | What it does |
 |---|---|
 | Save samples to | A folder you pick. Splicedd writes into it directly, so names and folders are exact. |
-| Subfolder | Nested inside it. Empty saves samples there directly. |
+| Folder in your downloads | Only used when no folder is chosen, since your downloads hold everything else too. |
 | Folder per pack | Groups samples by the pack they came from. |
 | Format | `WAV` (16-bit, what DAWs want) or `MP3` exactly as Splice encoded it. |
 | Trim encoder delay | Drops the silence MP3 encoders prepend, so loops start on the beat. |
@@ -147,7 +150,7 @@ Source layout:
 | `downloads` | Saving samples, and *Show in folder*. |
 | `storage` | Your settings. |
 | `offscreen` | Building the blob a download needs; a service worker can't. |
-| `contextMenus`, `scripting` | The right-click search, and reaching tabs opened before the extension was installed. |
+| `contextMenus`, `scripting` | The right-click search, the settings entry on the toolbar icon, and reaching tabs opened before the extension was installed. |
 | `declarativeNetRequest` | Blocking splice.com's analytics. Block rules need no access to the hosts they block, and none is asked for. |
 
 Splicedd downloads the same public preview files splice.com plays in your browser. Previews are not

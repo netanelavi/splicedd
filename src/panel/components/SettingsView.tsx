@@ -45,20 +45,21 @@ export default function SettingsView({ settings }: { settings: SpliceddSettings 
       <FolderSetting />
 
       <div>
-        <span className="sd-label">Subfolder</span>
+        <span className="sd-label">Folder in your downloads</span>
         <div className="sd-field" style={{ marginTop: 6, height: 34 }}>
           <FolderOpen size={15} aria-hidden />
           <input
             className="sd-text-input"
             style={{ border: "none", background: "none", height: "auto", padding: 0 }}
-            aria-label="Subfolder"
+            aria-label="Folder in your downloads"
             value={settings.downloadDir}
             placeholder="Splicedd"
             onChange={ev => set("downloadDir", ev.target.value)}
           />
         </div>
         <p className="sd-hint" style={{ marginTop: 6 }}>
-          Nested inside the folder above. Leave it empty to save samples there directly.
+          Only used when no folder is chosen above, since your downloads hold everything else too.
+          A chosen folder is the library itself, and samples go straight into it.
         </p>
       </div>
 

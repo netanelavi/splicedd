@@ -32,6 +32,7 @@ export interface SavedFile {
 /** A command the service worker pushes to the panel in a splice.com tab. */
 export type PanelCommand =
   | { kind: "toggle-panel" }
+  | { kind: "settings" }
   | { kind: "search"; query: string };
 
 /**

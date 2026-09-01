@@ -6,6 +6,7 @@ import { callWorker } from "../../chrome/messages";
 import { ensureFolderAccess, saveToFolder } from "../../chrome/folder";
 import { saveFile } from "../../chrome/net";
 import { settings } from "../../chrome/settings";
+import { joinPath } from "../../splice/paths";
 import { SampleFile, SampleStore } from "../sampleStore";
 import { attachFileDrag, startedOnControl } from "../drag";
 import { Toasts } from "./useToasts";
@@ -71,16 +72,22 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
 
       if (written != null) {
         if (announce) {
-          toasts.show(`Saved ${written}`);
+          toasts.show(written.existed
+            ? `${file.name} is already in your library`
+            : `Saved ${written.path}`);
         }
 
         return;
       }
 
-      const saved = await saveFile(file.bytes, file.mime, file.path);
+      // Falling back to the browser's download folder, which is everyone's
+      // download folder: the sample library goes in a folder of its own there,
+      // where a chosen one is already a folder of its own.
+      const filename = joinPath(settings().downloadDir, file.path);
+      const saved = await saveFile(file.bytes, file.mime, filename);
 
       if (announce) {
-        toasts.show(saved.existed ? `${file.name} is already in your library` : `Saved ${file.path}`, {
+        toasts.show(saved.existed ? `${file.name} is already in your library` : `Saved ${filename}`, {
           action: {
             label: "Show",
             run: () => void callWorker({ kind: "reveal-download", downloadId: saved.downloadId })

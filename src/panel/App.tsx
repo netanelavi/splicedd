@@ -30,6 +30,7 @@ import Panel, { SearchCommand } from "./Panel";
 export default function App({ host }: { host: HTMLElement }) {
   const settings = useSettings();
   const [open, setOpen] = useState(settings.openOnLoad);
+  const [showSettings, setShowSettings] = useState(false);
   const [command, setCommand] = useState<SearchCommand | null>(null);
 
   // The cache outlives the panel, so closing and reopening doesn't throw away
@@ -98,8 +99,13 @@ export default function App({ host }: { host: HTMLElement }) {
         case "toggle-panel":
           setOpen(x => !x);
           break;
+        case "settings":
+          setOpen(true);
+          setShowSettings(true);
+          break;
         case "search":
           setOpen(true);
+          setShowSettings(false);
           setCommand({ query: message.query, nonce: Date.now() });
           break;
       }
@@ -122,6 +128,8 @@ export default function App({ host }: { host: HTMLElement }) {
             toasts={toasts}
             nowPlaying={nowPlaying}
             command={command}
+            showSettings={showSettings}
+            onShowSettings={setShowSettings}
             onClose={() => setOpen(false)}
           />
         : <button type="button" className="sd-launcher" onClick={() => setOpen(true)}>

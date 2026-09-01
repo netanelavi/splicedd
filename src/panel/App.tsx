@@ -4,10 +4,15 @@ import { PanelCommand } from "../chrome/messages";
 import { assetUrl } from "../chrome/assets";
 import { settings as currentSettings, useSettings } from "../chrome/settings";
 import { PageObserver } from "../page/observer";
+import { Pager } from "../page/pager";
+import { SampleResolver } from "../page/resolver";
 import { SampleStore } from "./sampleStore";
+import { runSearch } from "./search";
 import { useSampleActions } from "./hooks/useSampleActions";
+import { useSpliceSite } from "./hooks/useSpliceSite";
 import { useToasts } from "./hooks/useToasts";
 import NowPlaying from "./components/NowPlaying";
+import PageStepper from "./components/PageStepper";
 import ToastStack from "./components/ToastStack";
 import Panel, { SearchCommand } from "./Panel";
 
@@ -35,6 +40,22 @@ export default function App({ host }: { host: HTMLElement }) {
   const page = useMemo(() => new PageObserver(), []);
   useEffect(() => page.start(), [page]);
   const nowPlaying = useSyncExternalStore(page.subscribe, page.nowPlaying);
+
+  // And knowing what the page holds is what lets Splice's own download and drag
+  // buttons do Splicedd's work. A row the page never fetched -- Splice renders
+  // its first page on the server -- is looked up with a search of our own.
+  const resolver = useMemo(
+    () => new SampleResolver(page.index, async filters => (await runSearch(filters)).items),
+    [page]
+  );
+
+  useSpliceSite({ resolver, store, actions, toasts, host });
+
+  // Splice paginates at the foot of a very long list; this offers the same
+  // movement from where the samples actually are.
+  const pager = useMemo(() => new Pager(), []);
+  useEffect(() => pager.start(), [pager]);
+  const pages = useSyncExternalStore(pager.subscribe, pager.current);
 
   useEffect(() => {
     const onCommand = (message: PanelCommand) => {
@@ -80,6 +101,8 @@ export default function App({ host }: { host: HTMLElement }) {
 
         {!open && nowPlaying != null &&
           <NowPlaying sample={nowPlaying} store={store} actions={actions} variant="floating" />}
+
+        {pages != null && <PageStepper state={pages} onTurn={pager.turn} />}
       </div>
     </>
   );

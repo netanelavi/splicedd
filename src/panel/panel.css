@@ -978,6 +978,26 @@ button, input, select, textarea {
   font-size: 12px;
 }
 
+/* --- walking splice.com's own pages --- */
+
+.sd-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  align-self: flex-end;
+  padding: 4px 6px;
+  border: 1px solid var(--sd-border);
+  border-radius: var(--sd-radius);
+  background: var(--sd-surface);
+  box-shadow: var(--sd-shadow);
+  color: var(--sd-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
 .sd-now-label {
   display: inline-flex;
   align-items: center;

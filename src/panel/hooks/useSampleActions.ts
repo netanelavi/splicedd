@@ -19,6 +19,13 @@ export interface SampleActions {
   /** Saves a sample to the download folder. */
   download: (sample: SpliceSample) => void;
 
+  /**
+   * Attaches a sample to a drag that has already begun, reporting whether it
+   * could. Splice's own rows are dragged through a plain DOM event, so this
+   * takes the transfer rather than a React one.
+   */
+  attachDrag: (transfer: DataTransfer, sample: SpliceSample) => boolean;
+
   dragStart: (event: DragEvent, sample: SpliceSample) => void;
 }
 
@@ -90,26 +97,19 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
       .finally(() => downloading.current.delete(sample.uuid));
   }, [render, save]);
 
-  const dragStart = useCallback((event: DragEvent, sample: SpliceSample) => {
-    // A drag that started on a button belongs to the button.
-    if (startedOnControl(event)) {
-      event.preventDefault();
-      return;
-    }
-
+  const attachDrag = useCallback((transfer: DataTransfer, sample: SpliceSample) => {
     const file = store.peek(sample);
 
     // A drag payload has to be attached synchronously, so a sample that hasn't
     // been rendered yet can't be dragged. Rendering starts on hover and on
     // mouse-down, which covers all but the very fastest drag.
     if (file == null) {
-      event.preventDefault();
       prepare(sample);
       toasts.show("Getting the sample ready - drag it again in a moment");
-      return;
+      return false;
     }
 
-    attachFileDrag(event.dataTransfer, file);
+    attachFileDrag(transfer, file);
 
     // Chromium only writes the file out if the drop target accepts it, and a
     // DAW that refuses would leave the user with nothing. Saving in the
@@ -117,7 +117,16 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     if (settings().saveOnDrag) {
       void save(file, false);
     }
+
+    return true;
   }, [store, prepare, save, toasts]);
 
-  return { busy, prepare, download, dragStart };
+  const dragStart = useCallback((event: DragEvent, sample: SpliceSample) => {
+    // A drag that started on a button belongs to the button.
+    if (startedOnControl(event) || !attachDrag(event.dataTransfer, sample)) {
+      event.preventDefault();
+    }
+  }, [attachDrag]);
+
+  return { busy, prepare, download, attachDrag, dragStart };
 }

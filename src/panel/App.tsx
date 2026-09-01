@@ -1,15 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { PanelCommand } from "../chrome/messages";
 import { assetUrl } from "../chrome/assets";
 import { settings as currentSettings, useSettings } from "../chrome/settings";
+import { PageObserver } from "../page/observer";
 import { SampleStore } from "./sampleStore";
+import { useSampleActions } from "./hooks/useSampleActions";
+import { useToasts } from "./hooks/useToasts";
+import NowPlaying from "./components/NowPlaying";
+import ToastStack from "./components/ToastStack";
 import Panel, { SearchCommand } from "./Panel";
 
 /**
- * The panel's outermost piece: whether it is open, and the commands the rest of
- * the extension sends it (the toolbar button, the keyboard shortcut and the
- * context menu all arrive here).
+ * The panel's outermost piece: whether it is open, the commands the rest of the
+ * extension sends it (the toolbar button, the keyboard shortcut and the context
+ * menu all arrive here), and everything that has to outlive it -- the sample
+ * cache, the toasts, and what splice.com itself is playing.
  */
 export default function App({ host }: { host: HTMLElement }) {
   const settings = useSettings();
@@ -20,6 +26,15 @@ export default function App({ host }: { host: HTMLElement }) {
   // everything that was already downloaded.
   const store = useMemo(() => new SampleStore(currentSettings), []);
   useEffect(() => () => store.dispose(), [store]);
+
+  const toasts = useToasts();
+  const actions = useSampleActions(store, toasts);
+
+  // Watching splice.com's own requests means a sample played on Splice's page
+  // can be dragged into a DAW without Splicedd searching for it again.
+  const page = useMemo(() => new PageObserver(), []);
+  useEffect(() => page.start(), [page]);
+  const nowPlaying = useSyncExternalStore(page.subscribe, page.nowPlaying);
 
   useEffect(() => {
     const onCommand = (message: PanelCommand) => {
@@ -42,14 +57,30 @@ export default function App({ host }: { host: HTMLElement }) {
     host.dataset.theme = settings.theme;
   }, [host, settings.theme]);
 
-  if (!open) {
-    return (
-      <button type="button" className="sd-launcher" onClick={() => setOpen(true)}>
-        <img src={assetUrl("icon-32.png")} alt="" width={18} height={18} />
-        Splicedd
-      </button>
-    );
-  }
+  return (
+    <>
+      {open
+        ? <Panel
+            store={store}
+            actions={actions}
+            toasts={toasts}
+            nowPlaying={nowPlaying}
+            command={command}
+            onClose={() => setOpen(false)}
+          />
+        : <button type="button" className="sd-launcher" onClick={() => setOpen(true)}>
+            <img src={assetUrl("icon-32.png")} alt="" width={18} height={18} />
+            Splicedd
+          </button>}
 
-  return <Panel store={store} command={command} onClose={() => setOpen(false)} />;
+      {/* Anchored to the viewport rather than the panel, so a toast still shows
+          when the panel is closed -- a drag from the launcher can fail too. */}
+      <div className="sd-dock">
+        <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
+
+        {!open && nowPlaying != null &&
+          <NowPlaying sample={nowPlaying} store={store} actions={actions} variant="floating" />}
+      </div>
+    </>
+  );
 }

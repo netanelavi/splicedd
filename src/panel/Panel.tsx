@@ -1,7 +1,7 @@
 import { PointerEvent as ReactPointerEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Search, Settings, X } from "lucide-react";
 
-import { SpliceSamplePack } from "../splice/api";
+import { SpliceSample, SpliceSamplePack } from "../splice/api";
 import { DEFAULT_FILTERS, hasActiveFilters } from "../splice/search";
 import { assetUrl } from "../chrome/assets";
 import { errorMessage } from "../chrome/messages";
@@ -9,15 +9,15 @@ import { mutateSettings, useSettings } from "../chrome/settings";
 import { SampleStore } from "./sampleStore";
 import { useSearch } from "./hooks/useSearch";
 import { usePlayback } from "./hooks/usePlayback";
-import { useSampleActions } from "./hooks/useSampleActions";
-import { useToasts } from "./hooks/useToasts";
+import { SampleActions } from "./hooks/useSampleActions";
+import { Toasts } from "./hooks/useToasts";
 import FilterBar from "./components/FilterBar";
+import NowPlaying from "./components/NowPlaying";
 import Pagination from "./components/Pagination";
 import PackBanner from "./components/PackBanner";
 import SampleRow from "./components/SampleRow";
 import SettingsView from "./components/SettingsView";
 import TagCloud from "./components/TagCloud";
-import ToastStack from "./components/ToastStack";
 import { Button, IconButton, Spinner } from "./components/primitives";
 
 const MIN_WIDTH = 380;
@@ -30,17 +30,18 @@ export interface SearchCommand {
 }
 
 export default function Panel(
-  { store, command, onClose }: {
+  { store, actions, toasts, nowPlaying, command, onClose }: {
     store: SampleStore;
+    actions: SampleActions;
+    toasts: Toasts;
+    nowPlaying: SpliceSample | null;
     command: SearchCommand | null;
     onClose: () => void;
   }
 ) {
   const settings = useSettings();
-  const toasts = useToasts();
   const search = useSearch({ limit: settings.resultsPerPage });
   const playback = usePlayback(store, err => toasts.show(errorMessage(err), { tone: "error" }));
-  const actions = useSampleActions(store, toasts);
 
   const [text, setText] = useState("");
   const [pack, setPack] = useState<SpliceSamplePack | null>(null);
@@ -193,7 +194,8 @@ export default function Panel(
               </div>
             </>}
 
-        <ToastStack toasts={toasts.toasts} dismiss={toasts.dismiss} />
+        {nowPlaying != null &&
+          <NowPlaying sample={nowPlaying} store={store} actions={actions} variant="docked" />}
       </div>
     </div>
   );

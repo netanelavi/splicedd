@@ -1,3 +1,5 @@
+import { DragEvent } from "react";
+
 import { SampleFile } from "./sampleStore";
 
 /**
@@ -16,4 +18,16 @@ export function attachFileDrag(transfer: DataTransfer, file: SampleFile) {
   // get something meaningful.
   transfer.setData("text/uri-list", file.url);
   transfer.setData("text/plain", file.name);
+}
+
+
+/**
+ * Whether a drag began on a control rather than on the draggable row around it.
+ * Buttons and waveforms mark themselves `data-no-drag`, and pressing one should
+ * press it, not pick the row up.
+ */
+export function startedOnControl(event: DragEvent) {
+  return event.nativeEvent
+    .composedPath()
+    .some(node => node instanceof HTMLElement && node.dataset.noDrag == "true");
 }

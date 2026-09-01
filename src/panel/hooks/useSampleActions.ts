@@ -6,7 +6,7 @@ import { callWorker } from "../../chrome/messages";
 import { saveFile } from "../../chrome/net";
 import { settings } from "../../chrome/settings";
 import { SampleFile, SampleStore } from "../sampleStore";
-import { attachFileDrag } from "../drag";
+import { attachFileDrag, startedOnControl } from "../drag";
 import { Toasts } from "./useToasts";
 
 export interface SampleActions {
@@ -91,6 +91,12 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
   }, [render, save]);
 
   const dragStart = useCallback((event: DragEvent, sample: SpliceSample) => {
+    // A drag that started on a button belongs to the button.
+    if (startedOnControl(event)) {
+      event.preventDefault();
+      return;
+    }
+
     const file = store.peek(sample);
 
     // A drag payload has to be attached synchronously, so a sample that hasn't

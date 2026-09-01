@@ -61,8 +61,12 @@ async function commandPanel(tab: chrome.tabs.Tab | undefined, command: PanelComm
     await chrome.tabs.sendMessage(tab.id, command);
   } catch {
     // The tab predates the extension being installed or updated, so it has no
-    // content script yet. Injecting one brings it up to date without a reload.
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
+    // content scripts yet. Injecting them brings it up to date without a
+    // reload; the tap picks up from the next request the page makes.
+    const target = { tabId: tab.id };
+
+    await chrome.scripting.executeScript({ target, files: ["tap.js"], world: "MAIN" });
+    await chrome.scripting.executeScript({ target, files: ["content.js"] });
     await chrome.tabs.sendMessage(tab.id, command);
   }
 }

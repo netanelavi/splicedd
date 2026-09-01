@@ -5,6 +5,7 @@
 import { Bytes } from "../bytes";
 import { SpliceSample } from "../splice/api";
 import { decodeSpliceAudio } from "../splice/decoder";
+import { previewUrlOf } from "../splice/harvest";
 import { mp3ToWav } from "../splice/audio";
 import { samplePath } from "../splice/paths";
 import { fetchBytes } from "../chrome/net";
@@ -181,10 +182,10 @@ export class SampleStore {
 }
 
 async function fetchPreview(sample: SpliceSample): Promise<Bytes> {
-  const preview = sample.files.find(x => x.asset_file_type_slug == "preview_mp3");
+  const preview = previewUrlOf(sample);
   if (preview == null) {
     throw new Error(`"${sample.name}" has no preview to download`);
   }
 
-  return decodeSpliceAudio(await fetchBytes(preview.url));
+  return decodeSpliceAudio(await fetchBytes(preview));
 }

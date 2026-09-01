@@ -13,6 +13,9 @@ requests are the same ones the site makes, so nothing has to be worked around.
 
 - **Drag straight into a DAW.** Grab a row and drop it on Ableton, FL Studio, Bitwig, Logic, a folder —
   anywhere that accepts a dropped file. The sample is decoded and converted before the drop lands.
+- **Follows Splice's own player.** Play anything on splice.com — a pack page, a rail, the search you were
+  already using — and a card appears with that sample, ready to drag or download. Splicedd reads it out of
+  the responses Splice already sent the page, so it costs no request of its own.
 - **Download.** One click saves a sample under your download folder, in a folder per pack.
 - **Decodes what Splice serves.** Previews are scrambled; Splicedd unscrambles them and converts the
   result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
@@ -55,7 +58,11 @@ The gear in the panel header holds:
 
 ```
 splice.com page
+├── tap.js ── in the page's own JavaScript world
+│     └── wraps fetch, and forwards a copy of what Splice asks for
+│
 ├── content.js ── the panel, in a shadow root
+│     ├── names the sample the page is playing, from what the tap saw
 │     ├── searches Splice's GraphQL API from the page itself
 │     ├── unscrambles previews and converts them to WAV (Web Audio)
 │     └── attaches the file to the drag as a Chromium `DownloadURL`
@@ -66,10 +73,14 @@ splice.com page
       └── offscreen.html mints the blob URLs a worker can't create itself
 ```
 
-Three details are worth knowing:
+Four details are worth knowing:
 
 - **Running inside the page is the whole trick.** Splice's API sits behind Cloudflare's bot management and
   a CORS policy that only trusts splice.com. A request made from the page satisfies both.
+- **Watching beats asking.** Splice signs a fresh preview URL into every response it sends its own player.
+  Reading those responses as they arrive means Splicedd already holds the URL for anything you play, knows
+  exactly what you're looking at, and adds no traffic. The tap returns every response to the page
+  untouched; it copies, it never intercepts.
 - **A drag payload must be attached synchronously**, so a sample is converted while you hover and press
   the mouse, before the drag begins. If you beat it to it, the panel says so and the next drag works.
 - **Nothing leaves your browser.** There's no server, no analytics, no account. The extension talks to
@@ -88,10 +99,11 @@ Source layout:
 
 | Path | |
 |---|---|
-| `src/splice/` | The Splice domain, free of any browser-extension concern: the search API and its filters, the preview decoder, MP3-to-WAV conversion, sample paths. |
+| `src/splice/` | The Splice domain, free of any browser-extension concern: the search API and its filters, reading samples out of a response, the preview decoder, MP3-to-WAV conversion, sample paths. |
+| `src/page/` | Watching splice.com's own requests: the tap that runs in the page's world, and the index that turns what it sees into the sample being played. |
 | `src/chrome/` | The extension platform: settings, messaging, and network access. |
 | `src/panel/` | The React panel injected into splice.com. |
-| `src/background.ts`, `src/offscreen.ts`, `src/content.tsx` | The three entry points the manifest names. |
+| `src/background.ts`, `src/offscreen.ts`, `src/content.tsx`, `src/page/tap.ts` | The four entry points the manifest names. |
 
 ## Permissions, and why
 

@@ -3,9 +3,9 @@
 //   yarn build          production build
 //   yarn dev            rebuild on change
 //
-// The three entry points can't share one Vite build: content scripts and
-// offscreen documents run as classic scripts, the service worker is an ES
-// module, and Rollup's IIFE output takes a single input per build.
+// The entry points can't share one Vite build: content scripts and offscreen
+// documents run as classic scripts, the service worker is an ES module, and
+// Rollup's IIFE output takes a single input per build.
 
 import { build } from "vite";
 import react from "@vitejs/plugin-react";
@@ -20,6 +20,7 @@ const watch = process.argv.includes("--watch");
 /** @type {{ entry: string, file: string, format: "iife" | "es" }[]} */
 const TARGETS = [
   { entry: "src/content.tsx", file: "content.js", format: "iife" },
+  { entry: "src/page/tap.ts", file: "tap.js", format: "iife" },
   { entry: "src/background.ts", file: "background.js", format: "es" },
   { entry: "src/offscreen.ts", file: "offscreen.js", format: "iife" }
 ];

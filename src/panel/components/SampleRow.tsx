@@ -45,18 +45,7 @@ export default function SampleRow(
       // Rendering the file takes a moment; starting on mouse-down means it's
       // usually ready by the time the drag actually begins.
       onPointerDown={() => actions.prepare(sample)}
-      onDragStart={event => {
-        const overControl = event.nativeEvent
-          .composedPath()
-          .some(node => node instanceof HTMLElement && node.dataset.noDrag == "true");
-
-        if (overControl) {
-          event.preventDefault();
-          return;
-        }
-
-        actions.dragStart(event, sample);
-      }}
+      onDragStart={event => actions.dragStart(event, sample)}
     >
       <button
         type="button"

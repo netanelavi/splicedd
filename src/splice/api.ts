@@ -1,4 +1,4 @@
-import { SpliceSortBy, SpliceSampleType, MusicKey, ChordType, SpliceTag } from "./entities";
+import { SpliceSortBy, SpliceSampleType, MusicKey, ChordType, SortOrder, SpliceTag } from "./entities";
 
 export const GRAPHQL_URL = "https://surfaces-graphql.splice.com/graphql"
 
@@ -16,6 +16,7 @@ export function createSearchRequest(query: string): SpliceSearchRequest {
       legacy: true,
       limit: 50,
       order: "DESC",
+      page: 1,
       sort: "relevance",
       tags: [],
       tags_exclude: []
@@ -42,7 +43,7 @@ export interface SpliceSearchRequest extends SpliceRequest<{
   min_bpm?: number,
   filepath: string,
   limit: number,
-  order: "DESC",
+  order: SortOrder,
   sort: SpliceSortBy,
   random_seed?: string,
   legacy?: true,

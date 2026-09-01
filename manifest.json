@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "Splicedd",
+  "version": "3.0.0",
+  "description": "Search, preview, download and drag Splice samples straight into your DAW \u2014 from inside splice.com.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "32": "icons/icon-32.png",
+    "128": "icons/icon-128.png",
+    "256": "icons/icon-256.png"
+  },
+  "action": {
+    "default_title": "Toggle the Splicedd panel (Alt+S)",
+    "default_icon": {
+      "32": "icons/icon-32.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://splice.com/*",
+        "https://www.splice.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "toggle-panel": {
+      "suggested_key": {
+        "default": "Alt+S"
+      },
+      "description": "Toggle the Splicedd panel"
+    }
+  },
+  "permissions": [
+    "storage",
+    "downloads",
+    "offscreen",
+    "contextMenus",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://splice.com/*",
+    "https://*.splice.com/*",
+    "https://spliceproduction.s3.*.amazonaws.com/*",
+    "https://*.amazonaws.com/spliceblob.splice.com/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*"
+      ],
+      "matches": [
+        "https://splice.com/*",
+        "https://www.splice.com/*"
+      ]
+    }
+  ]
+}

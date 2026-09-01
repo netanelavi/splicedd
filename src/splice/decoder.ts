@@ -1,8 +1,10 @@
+import { Bytes } from "../bytes";
+
 /**
  * Decodes a "scrambled" Splice MP3 sample.
  * @returns The unscrambled sample, also in the MP3 format.
  */
-export function decodeSpliceAudio(data: Uint8Array) {
+export function decodeSpliceAudio(data: Bytes): Bytes {
   let sizeData = Array.from(data.subarray(2, 10));
   let size = 0;
 

@@ -1,52 +1,80 @@
 import { useEffect, useState } from "react";
 
-import { HistoryEntry, forget, forgetAll, history, onHistoryChanged } from "../../chrome/history";
-import { LikedSample, likes, onLikesChanged, unlike } from "../../chrome/likes";
+import { Listed, SampleEntry, SearchEntry, StoredList, liked, played, saved, searched } from "../../chrome/lists";
 import { Toasts } from "../hooks/useToasts";
 import SavedList from "./SavedList";
+import SearchList from "./SearchList";
 
-/** Subscribes to one of the two lists Splicedd keeps of its own. */
-function useSaved<T>(read: () => Promise<T[]>, subscribe: (listener: () => void) => () => void) {
+/** Subscribes to one of the lists Splicedd keeps of its own. */
+function useList<T extends Listed>(list: StoredList<T>) {
   const [entries, setEntries] = useState<T[] | null>(null);
 
   useEffect(() => {
-    const refresh = () => void read().then(setEntries);
+    const refresh = () => void list.read().then(setEntries);
 
     refresh();
-    return subscribe(refresh);
-    // Both are module-level functions, so neither ever changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return list.onChanged(refresh);
+  }, [list]);
 
   return entries;
 }
 
-export function RecentView({ toasts }: { toasts: Toasts }) {
-  const entries = useSaved<HistoryEntry>(history, onHistoryChanged);
+function SampleView(
+  { list, empty, note, toasts }: {
+    list: StoredList<SampleEntry>;
+    empty: string;
+    note: string;
+    toasts: Toasts;
+  }
+) {
+  const entries = useList(list);
 
   return (
     <SavedList
-      entries={entries?.map(x => ({ ...x, at: x.savedAt, path: x.path })) ?? null}
+      entries={entries}
+      empty={empty}
+      note={note}
+      toasts={toasts}
+      onForget={uuid => void list.remove(uuid)}
+      onClear={() => void list.clear()}
+    />
+  );
+}
+
+export function SavedView({ toasts }: { toasts: Toasts }) {
+  return (
+    <SampleView
+      list={saved}
+      toasts={toasts}
       empty="Nothing saved yet. Download a sample from a Splice row and it shows up here, ready to drag into your DAW again without leaving the page."
       note="Dragging one of these reads it from your library rather than from Splice, so nothing is downloaded twice."
-      toasts={toasts}
-      onForget={uuid => void forget(uuid)}
-      onClear={() => void forgetAll()}
     />
   );
 }
 
 export function LikedView({ toasts }: { toasts: Toasts }) {
-  const entries = useSaved<LikedSample>(likes, onLikesChanged);
-
   return (
-    <SavedList
-      entries={entries?.map(x => ({ ...x, at: x.likedAt })) ?? null}
-      empty="Nothing marked yet. The heart on a Splice row marks a sample here, with no account and no sign-up dialog."
-      note="Marking a sample doesn't download it. One that is already in your library can be dragged straight out of this list."
+    <SampleView
+      list={liked}
       toasts={toasts}
-      onForget={uuid => void unlike(uuid)}
-      onClear={() => void Promise.all((entries ?? []).map(x => unlike(x.uuid)))}
+      empty="Nothing marked yet. The heart on a Splice row marks a sample here, with no account and no sign-up dialog."
+      note="Marking a sample doesn't download it. One already in your library can be dragged straight out of this list."
     />
   );
+}
+
+export function PlayedView({ toasts }: { toasts: Toasts }) {
+  return (
+    <SampleView
+      list={played}
+      toasts={toasts}
+      empty="Nothing played yet. Whatever you listen to on splice.com is noted here, whether you keep it or not."
+      note="A sample you didn't download isn't on disk to drag; its Splice row still is, and the search that finds it is one click away."
+    />
+  );
+}
+
+export function SearchedView() {
+  const entries = useList<SearchEntry>(searched);
+  return <SearchList entries={entries} onForget={uuid => void searched.remove(uuid)} onClear={() => void searched.clear()} />;
 }

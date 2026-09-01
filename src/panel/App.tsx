@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { PanelCommand } from "../chrome/messages";
+import { played, searched } from "../chrome/lists";
 import { fetchJson } from "../chrome/net";
 import { settings as currentSettings } from "../chrome/settings";
 import { PageObserver } from "../page/observer";
@@ -12,7 +13,7 @@ import { followPageTheme, setUpsellsHidden, showListTop } from "../page/site";
 import { SampleStore } from "./sampleStore";
 import { runSearch } from "./search";
 import { useSampleActions } from "./hooks/useSampleActions";
-import { useSpliceSite } from "./hooks/useSpliceSite";
+import { entryOf, useSpliceSite } from "./hooks/useSpliceSite";
 import { useToasts } from "./hooks/useToasts";
 import { useSettings } from "./useSettings";
 import NowPlaying from "./components/NowPlaying";
@@ -44,6 +45,13 @@ export default function App({ host }: { host: HTMLElement }) {
   const page = useMemo(() => new PageObserver(), []);
   useEffect(() => page.start(), [page]);
   const nowPlaying = useSyncExternalStore(page.subscribe, page.nowPlaying);
+
+  // What Splice's own player starts is worth noting whether or not it is kept.
+  useEffect(() => {
+    if (nowPlaying != null) {
+      void played.add(entryOf(nowPlaying));
+    }
+  }, [nowPlaying]);
 
   // And knowing what the page holds is what lets Splice's own download and drag
   // buttons do Splicedd's work. A row the page never fetched -- Splice renders
@@ -97,6 +105,7 @@ export default function App({ host }: { host: HTMLElement }) {
         // Which of these are already on disk is worth saying before anything is
         // hovered, and only the search that just landed can answer it.
         void latest.current.survey();
+        void rememberSearch(result.records);
       },
       () => { if (live) injector.refresh(null); }
     );
@@ -159,4 +168,32 @@ function withPerPage(perPage: number) {
 function asksBeyondTheFirstPage() {
   const params = new URL(window.location.href).searchParams;
   return parseInt(params.get("page") ?? "1", 10) > 1 || params.has("limit");
+}
+
+/**
+ * Notes the listing being looked at, so a search whose results were worth
+ * something can be returned to. The page number is left out: the search is the
+ * search wherever in it the reader happened to be.
+ */
+function rememberSearch(records: number) {
+  const url = new URL(window.location.href);
+
+  url.searchParams.delete("page");
+  url.hash = "";
+
+  const query = url.searchParams.get("filepath") ?? url.searchParams.get("query");
+  const tags = url.searchParams.getAll("tags").length;
+
+  return searched.add({
+    uuid: `${url.pathname}?${url.searchParams}`,
+    query: query ?? describe(url, tags),
+    url: url.href,
+    records
+  });
+}
+
+/** What to call a listing that nobody typed a query for. */
+function describe(url: URL, tags: number) {
+  const section = url.pathname.split("/").filter(x => x.length > 0).pop();
+  return tags > 0 ? `${section ?? "Samples"} (${tags} tags)` : section ?? "Samples";
 }

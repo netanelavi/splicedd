@@ -4,7 +4,7 @@ import { SpliceSample } from "../../splice/api";
 import { errorMessage } from "../../chrome/messages";
 import { callWorker } from "../../chrome/messages";
 import { ensureFolderAccess, saveToFolder } from "../../chrome/folder";
-import { remember } from "../../chrome/history";
+import { saved } from "../../chrome/lists";
 import { saveFile } from "../../chrome/net";
 import { DOWNLOADS_FOLDER } from "../../chrome/settings";
 import { joinPath } from "../../splice/paths";
@@ -72,7 +72,7 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
   }, [store, toasts, setBusyState]);
 
   const write = useCallback(async (sample: SpliceSample, file: SampleFile, announce: boolean) => {
-    const record = () => remember({
+    const record = () => saved.add({
       uuid: sample.uuid,
       name: file.name,
       path: file.path,
@@ -101,14 +101,14 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     // download folder: the sample library goes in a folder of its own there,
     // where a chosen one is already a folder of its own.
     const filename = joinPath(DOWNLOADS_FOLDER, file.path);
-    const saved = await saveFile(file.bytes, file.mime, filename);
+    const download = await saveFile(file.bytes, file.mime, filename);
     void record();
 
     if (announce) {
-      toasts.show(saved.existed ? `${file.name} is already in your library` : `Saved ${filename}`, {
+      toasts.show(download.existed ? `${file.name} is already in your library` : `Saved ${filename}`, {
         action: {
           label: "Show",
-          run: () => void callWorker({ kind: "reveal-download", downloadId: saved.downloadId })
+          run: () => void callWorker({ kind: "reveal-download", downloadId: download.downloadId })
         }
       });
     }

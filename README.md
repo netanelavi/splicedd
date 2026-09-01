@@ -42,8 +42,10 @@ are the same ones the site makes, so nothing has to be worked around.
   result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
 - **A heart that needs no account.** Splice's own opens a sign-up dialog when you're logged out; Splicedd
   answers it itself and keeps the list. Alt-click still reaches Splice's, for whoever has a subscription.
-- **Recent and Liked.** Everything saved and everything marked, in the panel — each one draggable straight
-  into your DAW, read off your own disk rather than fetched again.
+- **Four lists of its own**, in the panel: **Saved**, **Liked**, **Played** — everything you listened to,
+  kept or not — and **Searches**, every listing you looked at with what it returned, one click from being
+  back on it. A sample in any of them drags straight into your DAW, read off your own disk rather than
+  fetched again, which also means it works long after the page it came from has gone.
 - **Save a whole page.** *Save this page* beside the paginator saves every row on it, or just the ones
   picked out with <kbd>x</kbd>. Rows already in your library say so before you touch them.
 - **Keys, on the row under the pointer.** <kbd>d</kbd> downloads it, <kbd>p</kbd> plays it, <kbd>l</kbd>

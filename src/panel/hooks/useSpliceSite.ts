@@ -12,11 +12,12 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
+import { SpliceSample } from "../../splice/api";
 import { errorMessage } from "../../chrome/messages";
 import { SitePlayer } from "../../page/player";
 import { SampleResolver } from "../../page/resolver";
 import { folderHas } from "../../chrome/folder";
-import { likes, toggleLike } from "../../chrome/likes";
+import { SampleEntry, liked, played } from "../../chrome/lists";
 import {
   PICK_MARK, QA, ROW_MARK, SITE_STYLES, SiteRow, controlOf, hook, isTyping, likedBy, markLibrary,
   markLiked, markPicked, markRow, menuToggledBy, pageRequestedBy, permalinkOf, pickedRows,
@@ -76,7 +77,7 @@ export function useSpliceSite(
    * has to be discovered by hovering.
    */
   const survey = useCallback(async () => {
-    const marked = new Set((await likes()).map(x => x.uuid));
+    const marked = new Set((await liked.read()).map(x => x.uuid));
 
     for (const row of siteRows()) {
       try {
@@ -196,8 +197,12 @@ export function useSpliceSite(
         event.preventDefault();
         event.stopPropagation();
 
-        void player.toggle(row.element, async () => store.preview(await resolver.resolve(row)))
-          .catch(err => toasts.show(errorMessage(err), { tone: "error" }));
+        void player.toggle(row.element, async () => {
+          const sample = await resolver.resolve(row);
+
+          void played.add(entryOf(sample));
+          return store.preview(sample);
+        }).catch(err => toasts.show(errorMessage(err), { tone: "error" }));
 
         return;
       }
@@ -214,18 +219,9 @@ export function useSpliceSite(
         event.preventDefault();
         event.stopPropagation();
 
-        void resolver.resolve(row).then(async sample => {
-          const pack = sample.parents?.items?.[0];
-
-          const liked = await toggleLike({
-            uuid: sample.uuid,
-            name: sample.name,
-            pack: pack?.name ?? null,
-            cover: pack?.files?.find(x => x.asset_file_type_slug == "cover_image")?.url ?? null
-          });
-
-          markLiked(row.element, liked);
-        }, err => toasts.show(errorMessage(err), { tone: "error" }));
+        void resolver.resolve(row)
+          .then(async sample => markLiked(row.element, await liked.toggle(entryOf(sample))))
+          .catch(err => toasts.show(errorMessage(err), { tone: "error" }));
 
         return;
       }
@@ -317,6 +313,18 @@ export function useSpliceSite(
 
   // A fresh object every render would restart everything that depends on it.
   return useMemo(() => ({ survey, saveBatch }), [survey, saveBatch]);
+}
+
+/** What a list keeps about a sample: enough to find it again without Splice. */
+export function entryOf(sample: SpliceSample): Omit<SampleEntry, "at"> {
+  const pack = sample.parents?.items?.[0];
+
+  return {
+    uuid: sample.uuid,
+    name: sample.name,
+    pack: pack?.name ?? null,
+    cover: pack?.files?.find(x => x.asset_file_type_slug == "cover_image")?.url ?? null
+  };
 }
 
 /** Whether the reader asked their browser for the link rather than for the page. */

@@ -530,3 +530,15 @@ button, input, select, textarea {
   color: var(--sd-muted);
   font-size: 12px;
 }
+
+.sd-search-again {
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sd-search-again:hover strong {
+  text-decoration: underline;
+}

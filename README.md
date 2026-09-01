@@ -151,6 +151,16 @@ Source layout:
 | `src/chrome/` | The extension platform: settings, messaging, network access, the folder samples are written to, and the two lists Splicedd keeps of its own. |
 | `src/panel/` | What runs in the page: the sample cache, the actions on a sample, and the settings panel. |
 | `src/background.ts`, `src/offscreen.ts`, `src/content.tsx`, `src/page/tap.ts` | The four entry points the manifest names. |
+| `e2e/` | Six end-to-end runs against a mocked splice.com with the built extension loaded — the buttons and pages, naming a row, the download folder, the tap, the blocked trackers, the panel. |
+
+```bash
+yarn build
+cd e2e && npm install   # once
+npm test                # all six
+```
+
+[`docs/session-context.md`](docs/session-context.md) says how the extension came to be built this way:
+the decisions and their reasons, what is known to be impossible, and the traps already fallen into.
 
 ## Permissions, and why
 

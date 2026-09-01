@@ -1,7 +1,13 @@
 import { DragEvent } from "react";
 
 import { assetUrl } from "../chrome/assets";
-import { SampleFile } from "./sampleStore";
+/** What a drag needs to know about a file: not where it came from. */
+export interface DraggableFile {
+  /** An object URL for the bytes, which is what the OS is handed. */
+  url: string;
+  mime: string;
+  name: string;
+}
 
 /**
  * What sits under the cursor while a sample is dragged. Chromium's default is a
@@ -24,7 +30,7 @@ icon.src = assetUrl("icon-32.png");
  * resulting file wherever it lands, which is how a sample reaches a DAW's
  * arrangement view. Its value is `mime:filename:url`.
  */
-export function attachFileDrag(transfer: DataTransfer, file: SampleFile) {
+export function attachFileDrag(transfer: DataTransfer, file: DraggableFile) {
   transfer.effectAllowed = "copy";
 
   if (icon.complete && icon.naturalWidth > 0) {

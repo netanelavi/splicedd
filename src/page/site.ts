@@ -13,6 +13,7 @@ export const QA = {
   download: "download-button",
   drag: "drag-button",
   license: "license-button",
+  like: "like-button",
   menu: "menu-panel",
   play: "playPausePlaybackButton",
   menuContainer: "menu-container",
@@ -242,6 +243,15 @@ export const ADDED = "data-splicedd-added";
 /** Marks a row Splicedd drew, which is a copy of one Splice drew. */
 export const ROW_MARK = "data-splicedd-row";
 
+/** Marks a row whose sample is already in the library. */
+export const HAVE_MARK = "data-splicedd-have";
+
+/** Marks a row picked out for a batch. */
+export const PICK_MARK = "data-splicedd-picked";
+
+/** Marks a row whose sample the reader has set aside. */
+export const LIKE_MARK = "data-splicedd-liked";
+
 /**
  * The stylesheet Splicedd puts on splice.com.
  *
@@ -353,6 +363,23 @@ export const SITE_STYLES = `
     display: none !important;
   }
 
+  /*
+    A sample already on disk, and one picked out for a batch. Both are drawn on
+    the row's own edge, where they can't be mistaken for something of Splice's.
+  */
+  [${HAVE_MARK}] ${hook(QA.download)} {
+    color: #55b878;
+  }
+
+  [${LIKE_MARK}] ${hook(QA.like)} {
+    color: #ff6b8b;
+  }
+
+  [${PICK_MARK}] {
+    box-shadow: inset 3px 0 0 #7c6cff;
+    background: rgba(124, 108, 255, 0.07);
+  }
+
   /* The row playing, on a page Splice's own player knows nothing about. */
   [${ROW_MARK}-playing] ${hook(QA.play)} {
     color: #7c6cff;
@@ -432,6 +459,21 @@ export function menuToggledBy(node: EventTarget | null): HTMLElement | null {
   return details == null || inside ? null : row.querySelector<HTMLElement>(hook(QA.menu));
 }
 
+/** The row whose heart a click landed on, if it landed on one. */
+export function likedBy(node: EventTarget | null): HTMLElement | null {
+  const button = elementOf(node)?.closest(hook(QA.like));
+  return button?.closest<HTMLElement>(hook(QA.row)) ?? null;
+}
+
+export function markLiked(row: HTMLElement, liked: boolean) {
+  row.toggleAttribute(LIKE_MARK, liked);
+}
+
+/** The row showing the sample with the given id, if it is on this page. */
+export function rowFor(uuid: string, rowsOf: (row: HTMLElement) => string | null) {
+  return rows().find(row => rowsOf(row) == uuid) ?? null;
+}
+
 /** The row whose "copy link" a click landed on, if it landed on one. */
 export function sharedBy(node: EventTarget | null): HTMLElement | null {
   const button = elementOf(node)?.closest(hook(QA.share));
@@ -449,4 +491,29 @@ export function permalinkOf(row: HTMLElement): string | null {
 export function playedBy(node: EventTarget | null): HTMLElement | null {
   const button = elementOf(node)?.closest(hook(QA.play));
   return button?.closest<HTMLElement>(hook(QA.row)) ?? null;
+}
+
+/** Every row on the page, paired with what identifies the sample it shows. */
+export function siteRows(): SiteRow[] {
+  return rows().map(element => rowOf(element)).filter(row => row != null);
+}
+
+/** Says a row's sample is already on disk, or is no longer. */
+export function markLibrary(row: HTMLElement, have: boolean) {
+  row.toggleAttribute(HAVE_MARK, have);
+}
+
+export function markPicked(row: HTMLElement, picked: boolean) {
+  row.toggleAttribute(PICK_MARK, picked);
+}
+
+export function pickedRows(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>(`[${PICK_MARK}]`)];
+}
+
+/** Whether the reader is typing, in which case a bare letter is a letter. */
+export function isTyping(node: EventTarget | null) {
+  const element = elementOf(node);
+
+  return element?.closest("input, textarea, select, [contenteditable]") != null;
 }

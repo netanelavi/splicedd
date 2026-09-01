@@ -40,6 +40,14 @@ are the same ones the site makes, so nothing has to be worked around.
   folder of their own — where the browser gets the last word on the name.
 - **Decodes what Splice serves.** Previews are scrambled; Splicedd unscrambles them and converts the
   result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
+- **A heart that needs no account.** Splice's own opens a sign-up dialog when you're logged out; Splicedd
+  answers it itself and keeps the list. Alt-click still reaches Splice's, for whoever has a subscription.
+- **Recent and Liked.** Everything saved and everything marked, in the panel — each one draggable straight
+  into your DAW, read off your own disk rather than fetched again.
+- **Save a whole page.** *Save this page* beside the paginator saves every row on it, or just the ones
+  picked out with <kbd>x</kbd>. Rows already in your library say so before you touch them.
+- **Keys, on the row under the pointer.** <kbd>d</kbd> downloads it, <kbd>p</kbd> plays it, <kbd>l</kbd>
+  marks it, <kbd>x</kbd> picks it out for a batch. Ignored while you're typing.
 - **Right-click the toolbar icon** for *Splicedd settings* — which opens splice.com if you aren't there
   yet, and lands on them. The toolbar icon itself, or <kbd>Alt</kbd>+<kbd>S</kbd>, does the same.
 
@@ -131,7 +139,7 @@ Source layout:
 |---|---|
 | `src/splice/` | The Splice domain, free of any browser-extension concern: the search API and its filters, reading samples out of a response, the preview decoder, MP3-to-WAV conversion, sample paths. |
 | `src/page/` | splice.com itself: the tap that watches its requests from the page's own world, the index of what it has been sent, the one module that knows its markup, and what Splicedd adds to it — the row buttons, the paginator, the listing it draws and the player behind it. |
-| `src/chrome/` | The extension platform: settings, messaging, network access, and the folder samples are written to. |
+| `src/chrome/` | The extension platform: settings, messaging, network access, the folder samples are written to, and the two lists Splicedd keeps of its own. |
 | `src/panel/` | What runs in the page: the sample cache, the actions on a sample, and the settings panel. |
 | `src/background.ts`, `src/offscreen.ts`, `src/content.tsx`, `src/page/tap.ts` | The four entry points the manifest names. |
 

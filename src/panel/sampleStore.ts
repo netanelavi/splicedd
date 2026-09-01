@@ -151,7 +151,7 @@ export class SampleStore {
   }
 
   /** Where the sample belongs in a library, under the current settings. */
-  private pathOf(sample: SpliceSample) {
+  pathOf(sample: SpliceSample) {
     return samplePath(sample, { extension: this.settings().format });
   }
 

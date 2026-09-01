@@ -444,3 +444,89 @@ button, input, select, textarea {
   white-space: nowrap;
   font-weight: 500;
 }
+
+/* --- the panel's two views --- */
+
+.sd-views {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px 0;
+}
+
+.sd-view-tab {
+  padding: 6px 12px;
+  border: none;
+  border-radius: var(--sd-radius-sm);
+  background: none;
+  color: var(--sd-muted);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sd-view-tab:hover {
+  background: var(--sd-surface-hover);
+}
+
+.sd-view-tab[aria-selected="true"] {
+  background: var(--sd-accent-soft);
+  color: var(--sd-text);
+}
+
+/* --- what has been saved --- */
+
+.sd-history {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sd-history-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--sd-radius-sm);
+  cursor: grab;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+
+.sd-history-row:hover {
+  background: var(--sd-surface);
+}
+
+.sd-history-row img,
+.sd-history-cover {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--sd-surface-hover);
+  color: var(--sd-muted);
+}
+
+.sd-history-text {
+  min-width: 0;
+}
+
+.sd-history-text strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.sd-history-text small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sd-muted);
+  font-size: 12px;
+}

@@ -15,9 +15,12 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { errorMessage } from "../../chrome/messages";
 import { SitePlayer } from "../../page/player";
 import { SampleResolver } from "../../page/resolver";
+import { folderHas } from "../../chrome/folder";
+import { likes, toggleLike } from "../../chrome/likes";
 import {
-  ROW_MARK, SITE_STYLES, SiteRow, controlOf, markRow, menuToggledBy, pageRequestedBy,
-  permalinkOf, playedBy, rowOf, sharedBy
+  PICK_MARK, QA, ROW_MARK, SITE_STYLES, SiteRow, controlOf, hook, isTyping, likedBy, markLibrary,
+  markLiked, markPicked, markRow, menuToggledBy, pageRequestedBy, permalinkOf, pickedRows,
+  playedBy, rowOf, sharedBy, siteRows
 } from "../../page/site";
 import { SampleStore } from "../sampleStore";
 import { SampleActions } from "./useSampleActions";
@@ -67,6 +70,56 @@ export function useSpliceSite(
       markRow(row.element, null);
     }
   }, [resolver, store]);
+
+  /**
+   * Says which rows are already on disk and which have been marked, so neither
+   * has to be discovered by hovering.
+   */
+  const survey = useCallback(async () => {
+    const marked = new Set((await likes()).map(x => x.uuid));
+
+    for (const row of siteRows()) {
+      try {
+        const sample = await resolver.resolve(row);
+
+        markLiked(row.element, marked.has(sample.uuid));
+        markLibrary(row.element, await folderHas(store.pathOf(sample)));
+      } catch {
+        // A row nothing can name is a row nothing can be said about.
+      }
+    }
+  }, [resolver, store]);
+
+  /** Saves a run of rows one at a time, reporting as it goes. */
+  const saveAll = useCallback(async (batch: SiteRow[]) => {
+    if (batch.length == 0) {
+      return;
+    }
+
+    const progress = toasts.show(`Saving 1 of ${batch.length}...`, { sticky: true });
+    let saved = 0;
+
+    for (const [index, row] of batch.entries()) {
+      toasts.update(progress, `Saving ${index + 1} of ${batch.length}...`);
+      markRow(row.element, "loading");
+
+      try {
+        await actions.saveNow(await resolver.resolve(row));
+        markLibrary(row.element, true);
+        saved++;
+      } catch {
+        // Reported at the end: one toast per failure would bury the page.
+      } finally {
+        markRow(row.element, null);
+      }
+    }
+
+    toasts.update(progress, saved == batch.length
+      ? `Saved ${saved} samples`
+      : `Saved ${saved} of ${batch.length}; the rest wouldn't download`);
+
+    toasts.release(progress);
+  }, [actions, resolver, toasts]);
 
   const hovered = useRef<HTMLElement | null>(null);
   const dwell = useRef(0);
@@ -150,6 +203,34 @@ export function useSpliceSite(
       }
     }
 
+    // Splice's heart needs an account; logged out it opens a sign-up dialog.
+    // Alt-click still reaches it, for whoever has one.
+    const hearted = event.altKey ? null : likedBy(event.target);
+
+    if (hearted != null) {
+      const row = rowOf(hearted);
+
+      if (row != null) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        void resolver.resolve(row).then(async sample => {
+          const pack = sample.parents?.items?.[0];
+
+          const liked = await toggleLike({
+            uuid: sample.uuid,
+            name: sample.name,
+            pack: pack?.name ?? null,
+            cover: pack?.files?.find(x => x.asset_file_type_slug == "cover_image")?.url ?? null
+          });
+
+          markLiked(row.element, liked);
+        }, err => toasts.show(errorMessage(err), { tone: "error" }));
+
+        return;
+      }
+    }
+
     // Alt-click still reaches Splice's own button, which for a subscriber
     // downloads the licensed file rather than the preview.
     if (event.altKey || controlOf(event.target) != "download") {
@@ -169,6 +250,34 @@ export function useSpliceSite(
     resolver.resolve(row).then(actions.download, err => {
       toasts.show(`Couldn't find ${row.filename} on Splice: ${errorMessage(err)}`, { tone: "error" });
     });
+  });
+
+  useDocumentEvent("keydown", event => {
+    if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) {
+      return;
+    }
+
+    // Whatever the pointer is resting on, which is how a list is worked
+    // through without moving the hand back and forth to a button.
+    const row = hovered.current == null ? null : rowOf(hovered.current);
+
+    if (row == null) {
+      return;
+    }
+
+    if (event.key == "d") {
+      event.preventDefault();
+      void resolver.resolve(row).then(actions.download, () => {});
+    } else if (event.key == "p") {
+      event.preventDefault();
+      row.element.querySelector<HTMLElement>(hook(QA.play))?.click();
+    } else if (event.key == "l") {
+      event.preventDefault();
+      row.element.querySelector<HTMLElement>(hook(QA.like))?.click();
+    } else if (event.key == "x") {
+      event.preventDefault();
+      markPicked(row.element, !row.element.hasAttribute(PICK_MARK));
+    }
   });
 
   useDocumentEvent("dragstart", event => {
@@ -191,6 +300,23 @@ export function useSpliceSite(
     // Splice's handler would replace the payload with a link to its desktop app.
     event.stopPropagation();
   });
+
+  /** Saves the rows picked out with `x`, or the whole page if none are. */
+  const saveBatch = useCallback(() => {
+    const picked = pickedRows();
+    const batch = picked.length > 0
+      ? picked.map(element => rowOf(element)).filter(row => row != null)
+      : siteRows();
+
+    void saveAll(batch).then(() => {
+      for (const element of picked) {
+        markPicked(element, false);
+      }
+    });
+  }, [saveAll]);
+
+  // A fresh object every render would restart everything that depends on it.
+  return useMemo(() => ({ survey, saveBatch }), [survey, saveBatch]);
 }
 
 /** Whether the reader asked their browser for the link rather than for the page. */

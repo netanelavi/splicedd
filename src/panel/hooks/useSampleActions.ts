@@ -1,9 +1,10 @@
-import { DragEvent, useCallback, useRef, useState } from "react";
+import { DragEvent, useCallback, useMemo, useRef, useState } from "react";
 
 import { SpliceSample } from "../../splice/api";
 import { errorMessage } from "../../chrome/messages";
 import { callWorker } from "../../chrome/messages";
 import { ensureFolderAccess, saveToFolder } from "../../chrome/folder";
+import { remember } from "../../chrome/history";
 import { saveFile } from "../../chrome/net";
 import { DOWNLOADS_FOLDER } from "../../chrome/settings";
 import { joinPath } from "../../splice/paths";
@@ -20,6 +21,12 @@ export interface SampleActions {
 
   /** Saves a sample to the download folder. */
   download: (sample: SpliceSample) => void;
+
+  /**
+   * Renders a sample and puts it in the library, throwing if it can't. For a
+   * batch, which counts its own failures rather than raising one toast each.
+   */
+  saveNow: (sample: SpliceSample) => Promise<void>;
 
   /**
    * Attaches a sample to a drag that has already begun, reporting whether it
@@ -64,40 +71,61 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     }
   }, [store, toasts, setBusyState]);
 
-  const save = useCallback(async (file: SampleFile, announce: boolean) => {
-    try {
-      // A folder the reader chose is written to directly, which is the only way
-      // the file keeps the name and the place it was given.
-      const written = await saveToFolder(file.path, file.bytes);
+  const write = useCallback(async (sample: SpliceSample, file: SampleFile, announce: boolean) => {
+    const record = () => remember({
+      uuid: sample.uuid,
+      name: file.name,
+      path: file.path,
+      pack: sample.parents?.items?.[0]?.name ?? null,
+      cover: sample.parents?.items?.[0]?.files
+        ?.find(x => x.asset_file_type_slug == "cover_image")?.url ?? null
+    });
 
-      if (written != null) {
-        if (announce) {
-          toasts.show(written.existed
-            ? `${file.name} is already in your library`
-            : `Saved ${written.path}`);
-        }
+    // A folder the reader chose is written to directly, which is the only way
+    // the file keeps the name and the place it was given.
+    const written = await saveToFolder(file.path, file.bytes);
 
-        return;
-      }
-
-      // Falling back to the browser's download folder, which is everyone's
-      // download folder: the sample library goes in a folder of its own there,
-      // where a chosen one is already a folder of its own.
-      const filename = joinPath(DOWNLOADS_FOLDER, file.path);
-      const saved = await saveFile(file.bytes, file.mime, filename);
+    if (written != null) {
+      void record();
 
       if (announce) {
-        toasts.show(saved.existed ? `${file.name} is already in your library` : `Saved ${filename}`, {
-          action: {
-            label: "Show",
-            run: () => void callWorker({ kind: "reveal-download", downloadId: saved.downloadId })
-          }
-        });
+        toasts.show(written.existed
+          ? `${file.name} is already in your library`
+          : `Saved ${written.path}`);
       }
+
+      return;
+    }
+
+    // Falling back to the browser's download folder, which is everyone's
+    // download folder: the sample library goes in a folder of its own there,
+    // where a chosen one is already a folder of its own.
+    const filename = joinPath(DOWNLOADS_FOLDER, file.path);
+    const saved = await saveFile(file.bytes, file.mime, filename);
+    void record();
+
+    if (announce) {
+      toasts.show(saved.existed ? `${file.name} is already in your library` : `Saved ${filename}`, {
+        action: {
+          label: "Show",
+          run: () => void callWorker({ kind: "reveal-download", downloadId: saved.downloadId })
+        }
+      });
+    }
+  }, [toasts]);
+
+  /** The same, with a failure reported rather than raised. */
+  const save = useCallback(async (sample: SpliceSample, file: SampleFile, announce: boolean) => {
+    try {
+      await write(sample, file, announce);
     } catch (err) {
       toasts.show(`Couldn't save ${file.name}: ${errorMessage(err)}`, { tone: "error" });
     }
-  }, [toasts]);
+  }, [write, toasts]);
+
+  const saveNow = useCallback(async (sample: SpliceSample) => {
+    await write(sample, await store.file(sample), false);
+  }, [store, write]);
 
   const prepare = useCallback((sample: SpliceSample) => {
     if (store.peek(sample) == null) {
@@ -117,7 +145,7 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     downloading.current.add(sample.uuid);
 
     void render(sample)
-      .then(file => { if (file != null) return save(file, true); })
+      .then(file => { if (file != null) return save(sample, file, true); })
       .finally(() => downloading.current.delete(sample.uuid));
   }, [render, save]);
 
@@ -139,7 +167,7 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     // DAW that refuses would leave the user with nothing. Saving in the
     // background means the sample reaches the library either way -- which is
     // what the desktop app did, since it dragged out of the library itself.
-    void save(file, false);
+    void save(sample, file, false);
 
     return true;
   }, [store, prepare, save, toasts]);
@@ -151,5 +179,8 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     }
   }, [attachDrag]);
 
-  return { busy, prepare, download, attachDrag, dragStart };
+  return useMemo(
+    () => ({ busy, prepare, download, saveNow, attachDrag, dragStart }),
+    [busy, prepare, download, saveNow, attachDrag, dragStart]
+  );
 }

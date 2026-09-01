@@ -32,14 +32,16 @@ export interface SamplePathOptions {
  * themselves contain directories, which are preserved.
  */
 export function samplePath(sample: SpliceSample, options: SamplePathOptions = {}) {
-  const { extension } = options;
+  return libraryPath(sample.parents?.items?.[0]?.name ?? null, sample.name, options.extension);
+}
 
-  const pack = sample.parents?.items?.[0];
-  const name = extension == null
-    ? sample.name
-    : sample.name.replace(/(\.[^./]*)?$/, `.${extension}`);
-
-  return joinPath(...(pack == null ? [] : [pack.name]), ...name.split("/"));
+/**
+ * The same, for anything that knows a sample only by its pack and its name --
+ * which is all a marked or already-saved sample is remembered as.
+ */
+export function libraryPath(pack: string | null, name: string, extension?: string) {
+  const file = extension == null ? name : name.replace(/(\.[^./]*)?$/, `.${extension}`);
+  return joinPath(...(pack == null ? [] : [pack]), ...file.split("/"));
 }
 
 /** Joins path segments, making each one safe to write to disk. */

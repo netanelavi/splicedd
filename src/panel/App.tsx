@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { PanelCommand } from "../chrome/messages";
 import { fetchJson } from "../chrome/net";
@@ -54,11 +54,20 @@ export default function App({ host }: { host: HTMLElement }) {
   useEffect(() => pager.start(), [pager]);
   const pages = useSyncExternalStore(pager.subscribe, pager.current);
 
-  useSpliceSite({ resolver, store, actions, toasts, host, openPage: pager.open });
+  const site = useSpliceSite({ resolver, store, actions, toasts, host, openPage: pager.open });
+
+  // Held in a ref rather than depended on: what it closes over changes with
+  // every toast and every hover, and the page's furniture must not be torn
+  // down and rebuilt each time it does.
+  const latest = useRef(site);
+  latest.current = site;
 
   // A logged-out row has nothing to download with and nothing to drag, and a
   // logged-out listing doesn't page at all. Splicedd adds all three.
-  const injector = useMemo(() => new SiteInjector(perPage => pager.open(withPerPage(perPage))), [pager]);
+  const injector = useMemo(
+    () => new SiteInjector(perPage => pager.open(withPerPage(perPage)), () => latest.current.saveBatch()),
+    [pager]
+  );
   useEffect(() => injector.start(), [injector]);
 
   const listing = useMemo(() => new RowList(fetchJson), []);
@@ -84,6 +93,10 @@ export default function App({ host }: { host: HTMLElement }) {
           // would otherwise leave the reader at the foot of it.
           showListTop();
         }
+
+        // Which of these are already on disk is worth saying before anything is
+        // hovered, and only the search that just landed can answer it.
+        void latest.current.survey();
       },
       () => { if (live) injector.refresh(null); }
     );
@@ -111,7 +124,7 @@ export default function App({ host }: { host: HTMLElement }) {
 
   return (
     <>
-      {open && <Panel settings={settings} onClose={() => setOpen(false)} />}
+      {open && <Panel settings={settings} toasts={toasts} onClose={() => setOpen(false)} />}
 
       {/* Anchored to the viewport rather than the panel, so a toast still shows
           when it's closed -- most of the work happens with it closed. */}

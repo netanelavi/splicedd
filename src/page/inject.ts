@@ -43,8 +43,14 @@ export class SiteInjector {
   private frame = 0;
   private counts: PageCount | null = null;
 
-  /** @param onPerPage Told when the reader asks for a different page size. */
-  constructor(private readonly onPerPage: (perPage: number) => void) {}
+  /**
+   * @param onPerPage Told when the reader asks for a different page size.
+   * @param onSaveBatch Told to save the page, or whatever is picked out on it.
+   */
+  constructor(
+    private readonly onPerPage: (perPage: number) => void,
+    private readonly onSaveBatch: () => void
+  ) {}
 
   /** Starts keeping the page edited, and returns the function that stops it. */
   start() {
@@ -139,8 +145,25 @@ export class SiteInjector {
       item(step(QA.last, "Last page", page < totalPages ? totalPages : null))
     );
 
-    nav.append(list, this.perPage(), summary(page, totalPages));
+    nav.append(list, this.perPage(), summary(page, totalPages), this.batch());
     return nav;
+  }
+
+  /**
+   * Saving a whole page at once. Splice's listing has nowhere to put such a
+   * thing, so it goes beside the paginator Splicedd already draws -- which is
+   * also where "this page" means something.
+   */
+  private batch() {
+    const button = create("button", CLASSES.page) as HTMLButtonElement;
+
+    button.type = "button";
+    button.textContent = "Save this page";
+    button.title = "Saves every sample on this page, or just the ones picked out with x";
+    button.setAttribute(ADDED, "");
+    button.addEventListener("click", () => this.onSaveBatch());
+
+    return button;
   }
 
   private perPage() {

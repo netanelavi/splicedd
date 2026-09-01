@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { SpliceSample } from "../../splice/api";
 import { errorMessage } from "../../chrome/messages";
+import { showProgress } from "../../page/list";
 import { SitePlayer } from "../../page/player";
 import { SampleResolver } from "../../page/resolver";
 import { folderHas } from "../../chrome/folder";
@@ -21,7 +22,7 @@ import { SampleEntry, liked, played } from "../../chrome/lists";
 import {
   PICK_MARK, QA, ROW_MARK, SITE_STYLES, SiteRow, controlOf, hook, isTyping, likedBy, markLibrary,
   markLiked, markPicked, markRow, menuToggledBy, pageRequestedBy, permalinkOf, pickedRows,
-  playedBy, rowOf, sharedBy, siteRows
+  playedBy, rowOf, seekedBy, sharedBy, siteRows
 } from "../../page/site";
 import { SampleStore } from "../sampleStore";
 import { SampleActions } from "./useSampleActions";
@@ -35,6 +36,9 @@ import { Toasts } from "./useToasts";
  * a couple at a time so the fetching and decoding never crowds the page out.
  */
 const AHEAD = 2;
+
+/** How far an arrow key moves through a sample. */
+const NUDGE = 0.05;
 
 export function useSpliceSite(
   { resolver, store, actions, toasts, host, openPage }: {
@@ -58,7 +62,7 @@ export function useSpliceSite(
 
   // Splice's player has nothing to play on a page Splicedd drew, so its play
   // button is answered here for those rows and left alone on its own.
-  const player = useMemo(() => new SitePlayer(), []);
+  const player = useMemo(() => new SitePlayer(showProgress), []);
   useEffect(() => () => player.dispose(), [player]);
 
   /**
@@ -153,6 +157,20 @@ export function useSpliceSite(
     await Promise.all(Array.from({ length: AHEAD }, next));
   }, [warm]);
 
+  /** Starts a row playing, noting what it was. */
+  const play = useCallback(async (row: SiteRow) => {
+    try {
+      await player.toggle(row.element, async () => {
+        const sample = await resolver.resolve(row);
+
+        void played.add(entryOf(sample));
+        return store.preview(sample);
+      });
+    } catch (err) {
+      toasts.show(errorMessage(err), { tone: "error" });
+    }
+  }, [player, resolver, store, toasts]);
+
   const hovered = useRef<HTMLElement | null>(null);
 
   useDocumentEvent("pointerover", event => {
@@ -220,6 +238,27 @@ export function useSpliceSite(
       return;
     }
 
+    // Clicking along the waveform carries on from there, which is what a
+    // waveform on a row is for.
+    const seek = seekedBy(event.target, event.clientX);
+
+    if (seek != null && seek.row.hasAttribute(ROW_MARK)) {
+      const row = rowOf(seek.row);
+
+      if (row != null) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (player.playing(seek.row)) {
+          player.seek(seek.row, seek.at);
+        } else {
+          void play(row).then(() => player.seek(seek.row, seek.at));
+        }
+
+        return;
+      }
+    }
+
     if (playedBy(event.target)?.hasAttribute(ROW_MARK) == true) {
       const row = rowOf(event.target);
 
@@ -227,13 +266,7 @@ export function useSpliceSite(
         event.preventDefault();
         event.stopPropagation();
 
-        void player.toggle(row.element, async () => {
-          const sample = await resolver.resolve(row);
-
-          void played.add(entryOf(sample));
-          return store.preview(sample);
-        }).catch(err => toasts.show(errorMessage(err), { tone: "error" }));
-
+        void play(row);
         return;
       }
     }
@@ -297,6 +330,11 @@ export function useSpliceSite(
     } else if (event.key == "p") {
       event.preventDefault();
       row.element.querySelector<HTMLElement>(hook(QA.play))?.click();
+    } else if (event.key == "ArrowLeft" || event.key == "ArrowRight") {
+      // Nudging along a sample, which is what the desktop app's waveform did
+      // for the arrow keys.
+      event.preventDefault();
+      player.nudge(row.element, event.key == "ArrowRight" ? NUDGE : -NUDGE);
     } else if (event.key == "l") {
       event.preventDefault();
       row.element.querySelector<HTMLElement>(hook(QA.like))?.click();

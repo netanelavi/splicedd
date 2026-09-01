@@ -14,10 +14,11 @@ export default function ToastStack({ toasts, dismiss }: Pick<Toasts, "toasts" | 
         <div key={toast.id} className="sd-toast" data-tone={toast.tone}>
           <p>{toast.message}</p>
 
-          {toast.action != null &&
-            <Button variant="link" onClick={() => { toast.action!.run(); dismiss(toast.id); }}>
-              {toast.action.label}
-            </Button>}
+          {toast.actions?.map(action => (
+            <Button key={action.label} variant="link" onClick={() => { action.run(); dismiss(toast.id); }}>
+              {action.label}
+            </Button>
+          ))}
 
           <IconButton label="Dismiss" onClick={() => dismiss(toast.id)}>
             <X size={14} />

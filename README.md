@@ -42,6 +42,10 @@ are the same ones the site makes, so nothing has to be worked around.
   which is as far as a browser will go once you have pointed it at one yourself.
 - **Decodes what Splice serves.** Previews are scrambled; Splicedd unscrambles them and converts the
   result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
+- **Waveforms that follow the sound.** Painted into Splice's own canvas as its own bars, filling up to
+  the playhead as the desktop app drew it, with the thin bar underneath that Splice renders — in Splice's
+  own class, so Splice's stylesheet colours it. Click anywhere along it to carry on from there;
+  <kbd>←</kbd> and <kbd>→</kbd> nudge.
 - **A heart that needs no account.** Splice's own opens a sign-up dialog when you're logged out; Splicedd
   answers it itself and keeps the list. Alt-click still reaches Splice's, for whoever has a subscription.
 - **Four lists of its own**, in the panel: **Saved**, **Liked**, **Played** — everything you listened to,
@@ -51,7 +55,8 @@ are the same ones the site makes, so nothing has to be worked around.
 - **Save a whole page.** *Save this page* beside the paginator saves every row on it, or just the ones
   picked out with <kbd>x</kbd>. Rows already in your library say so before you touch them.
 - **Keys, on the row under the pointer.** <kbd>d</kbd> downloads it, <kbd>p</kbd> plays it, <kbd>l</kbd>
-  marks it, <kbd>x</kbd> picks it out for a batch. Ignored while you're typing.
+  marks it, <kbd>x</kbd> picks it out for a batch, <kbd>←</kbd>/<kbd>→</kbd> move through it. Ignored
+  while you're typing.
 - **Right-click the toolbar icon** for *Splicedd settings* — which opens splice.com if you aren't there
   yet, and lands on them. The toolbar icon itself, or <kbd>Alt</kbd>+<kbd>S</kbd>, does the same.
 

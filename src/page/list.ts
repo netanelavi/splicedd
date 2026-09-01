@@ -11,7 +11,7 @@
 // ours to write, and every one of them is named by a `data-qa` hook.
 
 import { SpliceSample, SpliceSamplePack } from "../splice/api";
-import { QA, ROW_MARK, hook, rows } from "./site";
+import { CLASSES, QA, ROW_MARK, hook, rows } from "./site";
 
 /** Where a tag on a row links: the same search, narrowed to that tag. */
 const TAG_PARAM = "tags";
@@ -20,6 +20,16 @@ const TAG_PARAM = "tags";
 const BAR_WIDTH = 2;
 const BAR_GAP = 1;
 const MIN_BAR = 1;
+
+/** How much of the waveform the part still to play is drawn at. */
+const AHEAD_ALPHA = 0.4;
+
+/**
+ * The waveform behind each canvas, so it can be drawn again at a new position
+ * without being fetched again. Weak, so a row that goes away takes its data
+ * with it.
+ */
+const drawn = new WeakMap<HTMLCanvasElement, number[]>();
 
 export class RowList {
   /** A row Splice drew, kept to make more of them. */
@@ -119,7 +129,10 @@ export class RowList {
       return;
     }
 
-    this.waveform(url).then(data => paintWaveform(canvas, data), () => {});
+    this.waveform(url).then(data => {
+      drawn.set(canvas, data);
+      paintWaveform(canvas, data, 0);
+    }, () => {});
   }
 }
 
@@ -203,11 +216,47 @@ function fileOf(name: string) {
 }
 
 /**
- * Splice's waveform: a column of rounded bars either side of the middle, in
- * whatever colour the canvas has inherited. Drawn at the element's real pixel
- * size so it isn't soft on a high-density screen.
+ * Shows how far through a row playback is, the two ways the two apps that came
+ * before showed it: the waveform filled up to the playhead, which is what the
+ * desktop app drew, and the thin bar under it, which is what Splice renders.
  */
-function paintWaveform(canvas: HTMLCanvasElement, data: number[]) {
+export function showProgress(row: HTMLElement, progress: number) {
+  const canvas = row.querySelector<HTMLCanvasElement>(`${hook(QA.waveform)} canvas`);
+  const data = canvas == null ? undefined : drawn.get(canvas);
+
+  if (canvas != null && data != null) {
+    paintWaveform(canvas, data, progress);
+  }
+
+  showProgressBar(row, progress);
+}
+
+/** Splice's own playhead: a `progress` under the waveform, while it plays. */
+function showProgressBar(row: HTMLElement, progress: number) {
+  const cell = row.querySelector(hook(QA.waveform))?.closest(".cell--waveform") ??
+    row.querySelector(hook(QA.waveform))?.parentElement;
+
+  const existing = cell?.querySelector("progress");
+
+  if (cell == null || progress <= 0) {
+    existing?.remove();
+    return;
+  }
+
+  const bar = existing ?? cell.appendChild(document.createElement("progress"));
+
+  bar.className = CLASSES.progress;
+  bar.max = 1;
+  bar.value = progress;
+}
+
+/**
+ * Splice's waveform: a column of bars either side of the middle, in whatever
+ * colour the canvas has inherited, with everything already played drawn solid
+ * and the rest faded. Drawn at the element's real pixel size, so it isn't soft
+ * on a high-density screen.
+ */
+function paintWaveform(canvas: HTMLCanvasElement, data: number[], progress: number) {
   const ratio = window.devicePixelRatio || 1;
   const width = canvas.clientWidth || canvas.width;
   const height = canvas.clientHeight || canvas.height;
@@ -226,8 +275,13 @@ function paintWaveform(canvas: HTMLCanvasElement, data: number[]) {
 
   const bars = Math.max(1, Math.floor(width / (BAR_WIDTH + BAR_GAP)));
   const middle = height / 2;
+  const played = progress * bars;
 
   for (let bar = 0; bar < bars; bar++) {
+    // A bar the playhead is standing on is drawn solid, so the edge between
+    // what has been heard and what hasn't lands where the sound is.
+    context.globalAlpha = bar < played ? 1 : AHEAD_ALPHA;
+
     // Each bar stands for a slice of the data, taken at its loudest.
     const from = Math.floor((bar / bars) * data.length);
     const to = Math.max(from + 1, Math.floor(((bar + 1) / bars) * data.length));

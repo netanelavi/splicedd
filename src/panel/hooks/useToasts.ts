@@ -9,7 +9,9 @@ export interface Toast {
   id: number;
   message: string;
   tone: "info" | "error";
-  action?: ToastAction;
+
+  /** What can be done about it, e.g. opening the file it just wrote. */
+  actions?: ToastAction[];
 }
 
 /** How long a toast stays up, in milliseconds. */
@@ -21,7 +23,7 @@ export interface Toasts {
   /** Shows a toast and answers with its id, for anything that outlives it. */
   show: (message: string, options?: {
     tone?: Toast["tone"];
-    action?: ToastAction;
+    actions?: ToastAction[];
 
     /** Stays until released, for something still going on. */
     sticky?: boolean;
@@ -48,7 +50,7 @@ export function useToasts(): Toasts {
   const show = useCallback<Toasts["show"]>((message, options) => {
     const id = nextId.current++;
 
-    setToasts(current => [...current, { id, message, tone: options?.tone ?? "info", action: options?.action }]);
+    setToasts(current => [...current, { id, message, tone: options?.tone ?? "info", actions: options?.actions }]);
 
     if (options?.sticky != true) {
       setTimeout(() => dismiss(id), TOAST_LIFETIME);

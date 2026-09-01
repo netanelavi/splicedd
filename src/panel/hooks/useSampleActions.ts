@@ -94,7 +94,12 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
         // is offered instead is the file, opened.
         toasts.show(
           written.existed ? `${file.name} is already in your library` : `Saved ${written.path}`,
-          { action: { label: "Open", run: () => openFile(file) } }
+          {
+            actions: [
+              { label: "Open", run: () => openFile(file) },
+              { label: "Copy folder", run: () => copyFolder(written.path, toasts) }
+            ]
+          }
         );
       }
 
@@ -110,10 +115,10 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
 
     if (announce) {
       toasts.show(download.existed ? `${file.name} is already in your library` : `Saved ${filename}`, {
-        action: {
+        actions: [{
           label: "Show in folder",
           run: () => void callWorker({ kind: "reveal-download", downloadId: download.downloadId })
-        }
+        }]
       });
     }
   }, [toasts]);
@@ -197,4 +202,19 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
  */
 function openFile(file: SampleFile) {
   window.open(file.url, "_blank", "noopener");
+}
+
+/**
+ * Copies the folder the sample went into, without the file itself, so it can be
+ * pasted into a file manager. It starts at the folder that was chosen: the
+ * picker hands over a name and a handle, never a path on disk, so where that
+ * folder sits is something only the reader knows.
+ */
+function copyFolder(path: string, toasts: Toasts) {
+  const folder = path.split("/").slice(0, -1).join("/");
+
+  void navigator.clipboard.writeText(folder).then(
+    () => toasts.show(`Copied ${folder}`),
+    err => toasts.show(`Couldn't copy the folder: ${errorMessage(err)}`, { tone: "error" })
+  );
 }

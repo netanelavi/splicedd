@@ -127,7 +127,8 @@ export async function saveToFolder(path: string, bytes: Bytes): Promise<SavedSam
     return null;
   }
 
-  const where = `${root.name}/${path}`;
+  // A folder with no name of its own contributes no segment to the path.
+  const where = [root.name, path].filter(x => x.length > 0).join("/");
 
   if (await folderHas(path)) {
     return { path: where, existed: true };

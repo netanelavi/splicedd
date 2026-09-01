@@ -50,7 +50,14 @@ export const CLASSES = {
   page: "pagination-page svelte-1iv1had",
   current: "current",
   perPage: "pagination-per-page",
-  summary: "pagination-summary"
+  summary: "pagination-summary",
+
+  /**
+   * The bar Splice puts under a playing row's waveform. Its stylesheet is in
+   * the page whether or not Splice ever renders one, so a bar Splicedd adds
+   * with this class is styled by Splice: 3px, in the site's own accent.
+   */
+  progress: "svelte-1v7zsf1"
 } as const;
 
 /** What Splice's own paginator falls back to when the page doesn't say. */
@@ -393,8 +400,16 @@ export const SITE_STYLES = `
     background: rgba(124, 108, 255, 0.07);
   }
 
-  /* The row playing, on a page Splice's own player knows nothing about. */
+  /* The row playing, and its waveform, which can be clicked along to seek. */
   [${ROW_MARK}-playing] ${hook(QA.play)} {
+    color: #7c6cff;
+  }
+
+  [${ROW_MARK}] ${hook(QA.waveform)} {
+    cursor: pointer;
+  }
+
+  [${ROW_MARK}-playing] ${hook(QA.waveform)} {
     color: #7c6cff;
   }
 
@@ -470,6 +485,22 @@ export function menuToggledBy(node: EventTarget | null): HTMLElement | null {
 
   // The button that opens it, not anything inside the menu it opened.
   return details == null || inside ? null : row.querySelector<HTMLElement>(hook(QA.menu));
+}
+
+/**
+ * Where along a row's waveform a click landed, as a fraction of its width --
+ * which is where the reader is asking the sample to carry on from.
+ */
+export function seekedBy(node: EventTarget | null, x: number): { row: HTMLElement; at: number } | null {
+  const waveform = elementOf(node)?.closest<HTMLElement>(hook(QA.waveform));
+  const row = waveform?.closest<HTMLElement>(hook(QA.row));
+
+  if (waveform == null || row == null) {
+    return null;
+  }
+
+  const box = waveform.getBoundingClientRect();
+  return box.width == 0 ? null : { row, at: (x - box.left) / box.width };
 }
 
 /** The row whose heart a click landed on, if it landed on one. */

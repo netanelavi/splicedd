@@ -26,7 +26,11 @@ are the same ones the site makes, so nothing has to be worked around.
   API how far the search really runs, builds the paginator Splice would have — first, previous, numbered
   pages, next, last, page size, *Page N of M* — and draws every page itself, the first one included, in
   Splice's own row markup and without a reload. A listing that changed hands halfway down would behave
-  two different ways; this one behaves one way throughout.
+  two different ways; this one behaves one way throughout. It only takes over a listing it can
+  reproduce: if Splice's own rows aren't what the search returns, the address narrowed them by something
+  Splicedd doesn't understand, and the page is left as Splice drew it, with a word about why it doesn't
+  page. A pack's page, whose address doesn't say what it lists, is Splice's to draw too — its rows still
+  get the buttons.
 - **The sign-up prompts taken down.** The `+` that licenses a sample with a credit, the *+ N more samples*
   standing in for the rest of the results with *Register for full access* under it, the marketing footer,
   and the *Rare Finds* button that looks like a filter but opens a blog post. It's a stylesheet rule
@@ -58,7 +62,12 @@ are the same ones the site makes, so nothing has to be worked around.
   marks it, <kbd>x</kbd> picks it out for a batch, <kbd>←</kbd>/<kbd>→</kbd> move through it. Ignored
   while you're typing.
 - **Right-click the toolbar icon** for *Splicedd settings* — which opens splice.com if you aren't there
-  yet, and lands on them. The toolbar icon itself, or <kbd>Alt</kbd>+<kbd>S</kbd>, does the same.
+  yet, and lands on them. The toolbar icon itself, or <kbd>Alt</kbd>+<kbd>S</kbd>, does the same; <kbd>Esc</kbd>
+  closes them. Select any text on splice.com and right-click for *Find "…" on Splice*, which runs the search.
+- **Keeps working.** A preview that failed to fetch once is asked for again the next time, not answered
+  with the same failure for as long as the tab is open; a listing left open for hours asks Splice afresh
+  rather than trusting URLs that have expired; a page of a hundred rows keeps all hundred ready. If the
+  extension is updated underneath a page, the page says so instead of failing quietly.
 
 ## Installing
 
@@ -151,12 +160,12 @@ Source layout:
 | `src/chrome/` | The extension platform: settings, messaging, network access, the folder samples are written to, and the two lists Splicedd keeps of its own. |
 | `src/panel/` | What runs in the page: the sample cache, the actions on a sample, and the settings panel. |
 | `src/background.ts`, `src/offscreen.ts`, `src/content.tsx`, `src/page/tap.ts` | The four entry points the manifest names. |
-| `e2e/` | Six end-to-end runs against a mocked splice.com with the built extension loaded — the buttons and pages, naming a row, the download folder, the tap, the blocked trackers, the panel. |
+| `e2e/` | Seven end-to-end runs against a mocked splice.com with the built extension loaded — the buttons and pages, whose listing it is, naming a row, the download folder, the tap, the blocked trackers, the panel. |
 
 ```bash
 yarn build
 cd e2e && npm install   # once
-npm test                # all six
+npm test                # all seven
 ```
 
 [`docs/session-context.md`](docs/session-context.md) says how the extension came to be built this way:

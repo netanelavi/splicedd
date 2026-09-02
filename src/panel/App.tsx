@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import { PanelCommand } from "../chrome/messages";
+import { PanelCommand, errorMessage } from "../chrome/messages";
+import { onFolderChanged } from "../chrome/folder";
 import { played, searched } from "../chrome/lists";
 import { fetchJson } from "../chrome/net";
 import { settings as currentSettings } from "../chrome/settings";
 import { PageObserver } from "../page/observer";
-import { Pager } from "../page/pager";
+import { PageState, Pager } from "../page/pager";
 import { SiteInjector } from "../page/inject";
 import { RowList } from "../page/list";
 import { SampleResolver } from "../page/resolver";
@@ -59,7 +60,7 @@ export default function App({ host }: { host: HTMLElement }) {
 
   const pager = useMemo(() => new Pager(), []);
   useEffect(() => pager.start(), [pager]);
-  const pages = useSyncExternalStore(pager.subscribe, pager.current);
+  const pages = usePages(pager);
 
   const site = useSpliceSite({ resolver, store, actions, toasts, host, openPage: pager.open });
 
@@ -86,37 +87,74 @@ export default function App({ host }: { host: HTMLElement }) {
    */
   const drawn = useRef(false);
 
+  /** Listings already explained, so the explanation isn't repeated. */
+  const explained = useRef(new Set<string>());
+
   // How far the listing runs, and what is on the page being asked for: neither
   // is anything the page itself can say, and asking Splice's server for a page
   // past the first returns the first, so Splicedd draws it from the answer.
   useEffect(() => {
+    // Only a search page's address says what it lists. Anywhere else the rows
+    // are Splice's to draw, and Splicedd's only to put its buttons on -- and
+    // to have ready, where the page has already named them.
+    if (pages == null || !pages.mirrored) {
+      injector.refresh(null);
+
+      if (pages != null) {
+        void latest.current.prepare();
+      }
+
+      return;
+    }
+
     let live = true;
+    const key = pages.search;
+
+    const explain = (message: string) => {
+      if (!explained.current.has(key)) {
+        explained.current.add(key);
+        toasts.show(message, { tone: "error" });
+      }
+    };
 
     resolver.pageResult().then(
       result => {
-        if (!live || result == null) {
+        if (!live) {
           return;
         }
-
-        injector.refresh({ page: result.currentPage, totalPages: result.totalPages });
 
         // Every page is drawn here, the first one included. A page Splice
         // served holds the same samples but not the behaviour that goes with
         // them -- its menus, its player and its waveforms are its own -- and a
         // listing that changes hands halfway down is a listing that behaves
         // two different ways.
-        if (!listing.owns(result.items)) {
-          listing.show(result.items);
-
-          // Turning a page from the paginator at the foot of a very long list
-          // would otherwise leave the reader at the foot of it. Arriving is
-          // not turning, so the first drawing of a listing leaves it alone.
-          if (drawn.current) {
-            showListTop();
-          }
-
-          drawn.current = true;
+        if (listing.owns(result.items)) {
+          injector.refresh({ page: result.currentPage, totalPages: result.totalPages });
+          return;
         }
+
+        // Unless Splice's page and Splice's answer disagree about what the
+        // listing holds, which means the address narrowed it by something
+        // Splicedd doesn't understand. Then the page is Splice's, buttons and
+        // all, and the reader is told why it doesn't page.
+        if (!listing.matches(result.items)) {
+          injector.refresh(null);
+          explain("Splicedd can't page this listing: Splice's rows aren't what its search returns");
+
+          return;
+        }
+
+        listing.show(result.items);
+        injector.refresh({ page: result.currentPage, totalPages: result.totalPages });
+
+        // Turning a page from the paginator at the foot of a very long list
+        // would otherwise leave the reader at the foot of it. Arriving is
+        // not turning, so the first drawing of a listing leaves it alone.
+        if (drawn.current) {
+          showListTop();
+        }
+
+        drawn.current = true;
 
         // Which of these are already on disk is worth saying before anything is
         // hovered, and only the search that just landed can answer it.
@@ -124,11 +162,29 @@ export default function App({ host }: { host: HTMLElement }) {
         void latest.current.prepare();
         void rememberSearch(result.records);
       },
-      () => { if (live) injector.refresh(null); }
+      err => {
+        if (live) {
+          injector.refresh(null);
+          explain(`Splicedd couldn't read this listing from Splice: ${errorMessage(err)}`);
+        }
+      }
     );
 
     return () => { live = false; };
-  }, [resolver, injector, listing, pages?.search]);
+  }, [resolver, injector, listing, toasts, pages?.search, pages?.mirrored, pages?.drawn]);
+
+  // A new folder is a new set of files on disk; a new format is a new set of
+  // files to have ready. Either way, every row is looked at afresh.
+  useEffect(() => onFolderChanged(() => latest.current.remark()), []);
+
+  const format = useRef(settings.format);
+
+  useEffect(() => {
+    if (format.current != settings.format) {
+      format.current = settings.format;
+      latest.current.remark();
+    }
+  }, [settings.format]);
 
   useEffect(() => setUpsellsHidden(settings.hideUpsells), [settings.hideUpsells]);
 
@@ -161,6 +217,15 @@ export default function App({ host }: { host: HTMLElement }) {
   );
 }
 
+/** The listing the page is showing, as React state. */
+function usePages(pager: Pager) {
+  const [pages, setPages] = useState<PageState | null>(pager.state);
+
+  useEffect(() => pager.onChange(setPages), [pager]);
+
+  return pages;
+}
+
 /**
  * The address for a different number of samples per page. The size belongs to
  * the search, so a search that changed size starts again from its first page.
@@ -176,8 +241,9 @@ function withPerPage(perPage: number) {
 
 /**
  * Notes the listing being looked at, so a search whose results were worth
- * something can be returned to. The page number is left out: the search is the
- * search wherever in it the reader happened to be.
+ * something can be returned to. The page number is left out, and so is the
+ * page size: the search is the search wherever in it the reader happened to
+ * be, and however much of it they were shown at once.
  */
 function rememberSearch(records: number) {
   const url = new URL(window.location.href);
@@ -185,11 +251,14 @@ function rememberSearch(records: number) {
   url.searchParams.delete("page");
   url.hash = "";
 
+  const identity = new URL(url.href);
+  identity.searchParams.delete("limit");
+
   const query = url.searchParams.get("filepath") ?? url.searchParams.get("query");
   const tags = url.searchParams.getAll("tags").length;
 
   return searched.add({
-    uuid: `${url.pathname}?${url.searchParams}`,
+    uuid: `${identity.pathname}?${identity.searchParams}`,
     query: query ?? describe(url, tags),
     url: url.href,
     records

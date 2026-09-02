@@ -8,15 +8,19 @@ import { decodeSpliceAudio } from "../splice/decoder";
 import { previewUrlOf } from "../splice/harvest";
 import { mp3ToWav } from "../splice/audio";
 import { samplePath } from "../splice/paths";
-import { folderFile, folderHas } from "../chrome/folder";
+import { folderFile } from "../chrome/folder";
 import { fetchBytes } from "../chrome/net";
 import { SpliceddSettings } from "../chrome/settings";
 
 /** A sample rendered into a file, ready to be dragged into a DAW or saved. */
 export interface SampleFile {
-  bytes: Bytes;
+  /**
+   * The file itself. One read back from the library is the file on disk, which
+   * costs no memory until something reads it; one rendered here is held.
+   */
+  blob: Blob;
 
-  /** An object URL for the bytes, which is what drag-and-drop hands to the DAW. */
+  /** An object URL for the file, which is what drag-and-drop hands to the DAW. */
   url: string;
 
   mime: string;
@@ -30,8 +34,13 @@ export interface SampleFile {
 
 const MIME_TYPES = { wav: "audio/wav", mp3: "audio/mpeg" } as const;
 
-/** How many samples' audio to hold on to before evicting the oldest. */
-const CACHE_LIMIT = 40;
+/**
+ * How many samples' files to hold on to before evicting the oldest. A whole
+ * page is prepared ahead of the reader, and the largest page holds a hundred
+ * rows: a limit below that would evict the first rows while the last were
+ * still being prepared, and the first drag on them would find nothing.
+ */
+const CACHE_LIMIT = 120;
 
 /**
  * A rendered file, and the promise that produced it. Drag-and-drop can only use
@@ -62,33 +71,27 @@ interface CacheEntry {
 /**
  * The panel's sample cache. Settings arrive through a provider rather than an
  * import, so the store doesn't care where they are stored.
+ *
+ * Nothing that failed is remembered: a request that was refused once -- a
+ * network blip, a URL that had just expired -- is made again the next time the
+ * sample is asked for, rather than answered with the same failure for as long
+ * as the page stays open.
  */
 export class SampleStore {
   private readonly entries = new Map<string, CacheEntry>();
 
   constructor(private readonly settings: () => SpliceddSettings) {}
 
-  /** Starts downloading a sample's preview without waiting for it. */
-  prefetch(sample: SpliceSample) {
-    // Nothing awaits a prefetch; a real request reports the failure itself.
-    void this.warm(sample).catch(() => {});
-  }
-
-  private async warm(sample: SpliceSample) {
-    const entry = this.entryOf(sample);
-
-    if (entry.mp3 == null && !await folderHas(this.pathOf(sample))) {
-      void this.audio(entry, sample).catch(() => {});
-    }
-  }
-
   /** Resolves to an object URL that plays the sample's preview. */
   preview(sample: SpliceSample): Promise<string> {
     const entry = this.entryOf(sample);
 
-    entry.previewUrl ??= this.audio(entry, sample).then(mp3 =>
-      this.track(entry, new Blob([mp3], { type: MIME_TYPES.mp3 }))
-    );
+    entry.previewUrl ??= this.audio(entry, sample)
+      .then(mp3 => this.track(entry, new Blob([mp3], { type: MIME_TYPES.mp3 })))
+      .catch(err => {
+        entry.previewUrl = undefined;
+        throw err;
+      });
 
     return entry.previewUrl;
   }
@@ -106,6 +109,11 @@ export class SampleStore {
     return this.entries.get(sample.uuid)?.renderings.get(this.renderKey())?.file;
   }
 
+  /** Where the sample belongs in a library, under the current settings. */
+  pathOf(sample: SpliceSample) {
+    return samplePath(sample, { extension: this.settings().format });
+  }
+
   /** Releases every object URL the store handed out. */
   dispose() {
     for (const entry of this.entries.values()) {
@@ -120,9 +128,18 @@ export class SampleStore {
     const key = this.renderKey();
 
     let rendering = entry.renderings.get(key);
+
     if (rendering == null) {
       const created: Rendering = { promise: this.render(entry, sample) };
-      created.promise.then(file => { created.file = file; }, () => {});
+
+      created.promise.then(
+        file => { created.file = file; },
+        () => {
+          if (entry.renderings.get(key) == created) {
+            entry.renderings.delete(key);
+          }
+        }
+      );
 
       entry.renderings.set(key, created);
       rendering = created;
@@ -139,20 +156,16 @@ export class SampleStore {
 
     // A sample already in the library is the sample. Reading it back skips the
     // download and the conversion, and hands the DAW the very file on disk.
-    const bytes = await folderFile(path) ?? await this.encode(entry, sample, format);
+    const blob = await folderFile(path) ??
+      new Blob([await this.encode(entry, sample, format)], { type: mime });
 
     return {
-      bytes,
+      blob,
       mime,
-      url: this.track(entry, new Blob([bytes], { type: mime })),
+      url: this.track(entry, blob),
       path,
       name: path.split("/").pop()!
     };
-  }
-
-  /** Where the sample belongs in a library, under the current settings. */
-  pathOf(sample: SpliceSample) {
-    return samplePath(sample, { extension: this.settings().format });
   }
 
   private async encode(entry: CacheEntry, sample: SpliceSample, format: "wav" | "mp3") {
@@ -165,7 +178,10 @@ export class SampleStore {
 
   /** The unscrambled preview, downloaded once however many things want it. */
   private audio(entry: CacheEntry, sample: SpliceSample) {
-    return entry.mp3 ??= fetchPreview(sample);
+    return entry.mp3 ??= fetchPreview(sample).catch(err => {
+      entry.mp3 = undefined;
+      throw err;
+    });
   }
 
   private entryOf(sample: SpliceSample): CacheEntry {

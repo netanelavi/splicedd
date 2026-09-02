@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 import { assetUrl } from "../chrome/assets";
@@ -23,6 +23,18 @@ export default function Panel(
   }
 ) {
   const [view, setView] = useState<View>("settings");
+
+  // Escape closes it, as it does any other window on top of a page.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key == "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return (
     <div className="sd-root">

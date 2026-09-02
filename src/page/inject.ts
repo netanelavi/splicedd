@@ -14,7 +14,7 @@
 
 import { GAP, pageList } from "../paging";
 import {
-  ADDED, CLASSES, QA, actionsOf, hook, pagination, paginationAnchor, rows
+  ADDED, CLASSES, QA, actionsOf, hook, pagination, paginationAnchor, perPage, rows
 } from "./site";
 
 /** Splice's own sprite, already in the page; the grip is drawn here instead. */
@@ -43,6 +43,9 @@ export class SiteInjector {
   private frame = 0;
   private counts: PageCount | null = null;
 
+  /** What the paginator on the page was drawn for, so it isn't redrawn for the same. */
+  private drawnFor: string | null = null;
+
   /**
    * @param onPerPage Told when the reader asks for a different page size.
    * @param onSaveBatch Told to save the page, or whatever is picked out on it.
@@ -69,11 +72,23 @@ export class SiteInjector {
     };
   }
 
-  /** Re-draws the paginator, once the page count behind it has changed. */
+  /**
+   * Re-draws the paginator for a page count and an address. One already
+   * showing exactly that is left as it is, since taking it down and putting it
+   * back would drop the reader's focus and flash the page for nothing.
+   */
   refresh(counts: PageCount | null) {
-    this.counts = counts;
-
     const drawn = pagination();
+    const key = counts == null
+      ? null
+      : `${counts.page}/${counts.totalPages} ${window.location.pathname}${window.location.search}`;
+
+    if (key != null && key == this.drawnFor && drawn?.hasAttribute(ADDED) == true) {
+      return;
+    }
+
+    this.counts = counts;
+    this.drawnFor = key;
 
     if (drawn?.hasAttribute(ADDED) == true) {
       drawn.remove();
@@ -99,16 +114,21 @@ export class SiteInjector {
   private addButtons(row: HTMLElement) {
     const actions = actionsOf(row);
 
-    // A subscriber's row already has both, and Splice's own are the ones that
-    // reach the licensed file.
-    if (actions == null || actions.querySelector(hook(QA.download)) != null) {
+    if (actions == null) {
       return;
     }
 
-    actions.prepend(
-      button(QA.download, "Download", DOWNLOAD_ICON),
-      button(QA.drag, "Drag to DAW", GRIP_ICON)
-    );
+    // Only what the row is missing: a subscriber's row already has both, and
+    // Splice's own are the ones that reach the licensed file. Prepended last
+    // first, so the download lands at the front.
+    for (const [name, label, icon] of [
+      [QA.drag, "Drag to DAW", GRIP_ICON],
+      [QA.download, "Download", DOWNLOAD_ICON]
+    ]) {
+      if (actions.querySelector(hook(name)) == null) {
+        actions.prepend(button(name, label, icon));
+      }
+    }
   }
 
   private addPagination() {
@@ -170,7 +190,14 @@ export class SiteInjector {
     const label = create("label", CLASSES.perPage, QA.perPageLabel);
     const select = create("select", "", QA.perPage) as HTMLSelectElement;
 
-    for (const choice of PER_PAGE_CHOICES) {
+    // The page's own size is always on offer, whatever it is: a select that
+    // says 25 above a listing of ten would be telling the reader a story.
+    const current = perPage();
+    const choices = PER_PAGE_CHOICES.includes(current)
+      ? PER_PAGE_CHOICES
+      : [...PER_PAGE_CHOICES, current].sort((a, b) => a - b);
+
+    for (const choice of choices) {
       const option = document.createElement("option");
 
       option.value = choice.toString();
@@ -178,7 +205,7 @@ export class SiteInjector {
       select.append(option);
     }
 
-    select.value = currentPerPage().toString();
+    select.value = current.toString();
     select.addEventListener("change", () => this.onPerPage(parseInt(select.value, 10)));
 
     label.append(text("span", "Per page"), select);
@@ -262,13 +289,6 @@ function gap() {
 
 function summary(page: number, totalPages: number) {
   return text("span", `Page ${page} of ${totalPages}`, CLASSES.summary, QA.summary);
-}
-
-function currentPerPage() {
-  const stated = new URL(window.location.href).searchParams.get("limit");
-  const value = stated == null ? NaN : parseInt(stated, 10);
-
-  return PER_PAGE_CHOICES.includes(value) ? value : PER_PAGE_CHOICES[1];
 }
 
 function item(child: Element) {

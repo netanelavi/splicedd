@@ -2,7 +2,7 @@
 // around a native control, so keyboard support and accessibility come for free.
 
 import { ReactNode } from "react";
-import { ChevronDown, LoaderCircle, LucideIcon } from "lucide-react";
+import { ChevronDown, LucideIcon } from "lucide-react";
 
 export function IconButton(
   { label, onClick, children, active, disabled, className }: {
@@ -83,8 +83,4 @@ export function Switch({ label, checked, onChange }: { label: string; checked: b
       onClick={() => onChange(!checked)}
     />
   );
-}
-
-export function Spinner({ size = 16 }: { size?: number }) {
-  return <LoaderCircle className="sd-spinner" size={size} aria-hidden />;
 }

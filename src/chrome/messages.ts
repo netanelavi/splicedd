@@ -32,8 +32,7 @@ export interface SavedFile {
 /** A command the service worker pushes to the panel in a splice.com tab. */
 export type PanelCommand =
   | { kind: "toggle-panel" }
-  | { kind: "settings" }
-  | { kind: "search"; query: string };
+  | { kind: "settings" };
 
 /**
  * A job the service worker hands to the offscreen document. Offscreen documents
@@ -54,6 +53,18 @@ export interface OffscreenReply {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
 
+/** What a page is told when the extension was reloaded or updated underneath it. */
+const RELOADED = "Splicedd was updated - reload this page to keep using it";
+
+/**
+ * Whether this page's copy of the extension is still the installed one. A
+ * reload or an update leaves the old content script running with every
+ * extension API gone, which is what "Extension context invalidated" means.
+ */
+export function extensionAlive() {
+  return chrome.runtime?.id != null;
+}
+
 export function errorMessage(err: unknown) {
   return err instanceof Error ? err.message : String(err);
 }
@@ -63,14 +74,18 @@ export function errorMessage(err: unknown) {
  * throwing with the error the other side reported.
  */
 export async function sendRequest<T>(message: unknown, recipient: string): Promise<T> {
+  if (!extensionAlive()) {
+    throw new Error(RELOADED);
+  }
+
   let reply: Result<T> | undefined;
 
   try {
     reply = await chrome.runtime.sendMessage(message);
   } catch (err) {
-    // Most often "Extension context invalidated": the extension was reloaded
-    // while this splice.com tab stayed open.
-    throw new Error(`couldn't reach the Splicedd ${recipient} (${errorMessage(err)})`);
+    throw new Error(extensionAlive()
+      ? `couldn't reach the Splicedd ${recipient} (${errorMessage(err)})`
+      : RELOADED);
   }
 
   if (reply == null) {

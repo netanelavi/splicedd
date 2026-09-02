@@ -10,8 +10,6 @@
 // where it says with the name it says. The browser's download folder stays as
 // the fallback for when no folder has been chosen.
 
-import { Bytes } from "../bytes";
-
 /** Just enough of the File System Access API to write a file into a folder. */
 type PermissionState = "granted" | "denied" | "prompt";
 
@@ -29,7 +27,7 @@ interface DirectoryHandle extends HandlePermission {
 
 interface FileHandle {
   getFile(): Promise<File>;
-  createWritable(): Promise<WritableStream & { write(data: BufferSource): Promise<void> }>;
+  createWritable(): Promise<WritableStream & { write(data: Blob): Promise<void> }>;
 }
 
 interface Picker {
@@ -77,12 +75,29 @@ export async function forgetFolder() {
   await put(null);
 }
 
+const listeners = new Set<() => void>();
+
+/** Calls back when the chosen folder changes, in this tab. */
+export function onFolderChanged(listener: () => void) {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+/** The permission being asked for right now, so two clicks share one prompt. */
+let asking: Promise<boolean> | null = null;
+
 /**
  * Makes sure the chosen folder is still writable, asking again if the browser
  * has forgotten. Like the picker, asking again needs a click behind it -- so
- * this is called first thing in a click handler, before anything is awaited.
+ * this is called first thing in a click handler, before anything is awaited,
+ * and whatever the click goes on to save waits for the answer.
  */
-export async function ensureFolderAccess(): Promise<boolean> {
+export function ensureFolderAccess(): Promise<boolean> {
+  asking ??= askFolderAccess().finally(() => { asking = null; });
+  return asking;
+}
+
+async function askFolderAccess() {
   const handle = await get();
 
   if (handle == null) {
@@ -120,7 +135,7 @@ export interface SavedSample {
  * have been edited, renamed into place, or simply be the same bytes; none of
  * those is improved by writing over it.
  */
-export async function saveToFolder(path: string, bytes: Bytes): Promise<SavedSample | null> {
+export async function saveToFolder(path: string, data: Blob): Promise<SavedSample | null> {
   const root = await get();
 
   if (root == null || !await writable(root)) {
@@ -144,7 +159,7 @@ export async function saveToFolder(path: string, bytes: Bytes): Promise<SavedSam
   const stream = await file.createWritable();
 
   try {
-    await stream.write(bytes);
+    await stream.write(data);
   } finally {
     await stream.close();
   }
@@ -158,18 +173,13 @@ export async function folderHas(path: string): Promise<boolean> {
 }
 
 /**
- * A sample already in the library, read back rather than fetched again. The
- * file on disk is the one the reader has; downloading a second copy of it would
- * be work nobody asked for.
+ * A sample already in the library, as the file on disk rather than a copy of
+ * it: nothing is read until something reads it, so a whole page of samples
+ * already held costs nothing to have ready.
  */
-export async function folderFile(path: string): Promise<Bytes | null> {
+export async function folderFile(path: string): Promise<File | null> {
   const file = await handleFor(path);
-
-  if (file == null) {
-    return null;
-  }
-
-  return new Uint8Array(await (await file.getFile()).arrayBuffer());
+  return file == null ? null : await file.getFile();
 }
 
 async function handleFor(path: string): Promise<FileHandle | null> {
@@ -212,22 +222,37 @@ async function walk(root: DirectoryHandle, path: string, options: { create: bool
 // chrome.storage is out and IndexedDB is in. It stays per-browser, which is
 // right: a folder on this machine means nothing on another.
 
+/** The one connection, opened on first use and kept: every row asks for the folder. */
+let database: Promise<IDBDatabase> | null = null;
+
 function open(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  database ??= new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DATABASE, 1);
 
     request.onupgradeneeded = () => request.result.createObjectStore(STORE);
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const opened = request.result;
+
+      // Another tab upgrading the database, or the browser clearing it: let
+      // go, and the next use opens afresh.
+      opened.onversionchange = () => { opened.close(); database = null; };
+      opened.onclose = () => { database = null; };
+
+      resolve(opened);
+    };
     request.onerror = () => reject(request.error);
   });
+
+  database.catch(() => { database = null; });
+  return database;
 }
 
 async function get(): Promise<DirectoryHandle | null> {
   try {
-    const database = await open();
+    const connection = await open();
 
     return await new Promise((resolve, reject) => {
-      const request = database.transaction(STORE, "readonly").objectStore(STORE).get(KEY);
+      const request = connection.transaction(STORE, "readonly").objectStore(STORE).get(KEY);
 
       request.onsuccess = () => resolve((request.result as DirectoryHandle) ?? null);
       request.onerror = () => reject(request.error);
@@ -239,13 +264,17 @@ async function get(): Promise<DirectoryHandle | null> {
 }
 
 async function put(handle: DirectoryHandle | null) {
-  const database = await open();
+  const connection = await open();
 
   await new Promise<void>((resolve, reject) => {
-    const store = database.transaction(STORE, "readwrite").objectStore(STORE);
+    const store = connection.transaction(STORE, "readwrite").objectStore(STORE);
     const request = handle == null ? store.delete(KEY) : store.put(handle, KEY);
 
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
+
+  for (const listener of listeners) {
+    listener();
+  }
 }

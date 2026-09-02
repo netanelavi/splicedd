@@ -13,10 +13,14 @@ const HOST_ID = "splicedd-panel-host";
 
 async function mount() {
   // The service worker injects this script into tabs that predate the
-  // extension, which can race with the manifest's own injection.
-  if (document.getElementById(HOST_ID) != null) {
+  // extension, which can race with the manifest's own injection -- and with a
+  // copy of itself still reading its settings. The page is claimed before
+  // anything is awaited, so only one copy ever mounts.
+  if (document.documentElement.dataset.splicedd != null || document.getElementById(HOST_ID) != null) {
     return;
   }
+
+  document.documentElement.dataset.splicedd = "starting";
 
   await loadSettings();
 

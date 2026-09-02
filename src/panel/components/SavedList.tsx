@@ -2,6 +2,7 @@ import { DragEvent, useEffect, useState } from "react";
 import { FolderOpen, Trash2 } from "lucide-react";
 
 import { folderFile } from "../../chrome/folder";
+import { SampleEntry } from "../../chrome/lists";
 import { errorMessage } from "../../chrome/messages";
 import { settings } from "../../chrome/settings";
 import { libraryPath } from "../../splice/paths";
@@ -12,23 +13,6 @@ import { Button, IconButton } from "./primitives";
 /** Guessed from the extension, which is all a library path carries. */
 const MIME_TYPES: Record<string, string> = { wav: "audio/wav", mp3: "audio/mpeg" };
 
-/** A sample Splicedd knows about without Splice: saved, or marked. */
-export interface SavedSample {
-  uuid: string;
-  name: string;
-  pack: string | null;
-  cover: string | null;
-
-  /**
-   * Where it sits in the library, for something already saved. Anything else
-   * works it out from the pack and the name, which is the same rule.
-   */
-  path?: string;
-
-  /** When it was saved or marked, shown as how long ago. */
-  at: number;
-}
-
 /**
  * A list of samples Splicedd holds on its own -- what it has saved, and what
  * has been marked. Either is dragged out of the library itself: the bytes come
@@ -36,7 +20,7 @@ export interface SavedSample {
  */
 export default function SavedList(
   { entries, empty, note, toasts, onForget, onClear }: {
-    entries: SavedSample[] | null;
+    entries: SampleEntry[] | null;
     empty: string;
     note: string;
     toasts: Toasts;
@@ -72,12 +56,15 @@ export default function SavedList(
 
 function SavedRow(
   { entry, toasts, onForget }: {
-    entry: SavedSample;
+    entry: SampleEntry;
     toasts: Toasts;
     onForget: (uuid: string) => void;
   }
 ) {
   const [url, setUrl] = useState<string | null>(null);
+
+  // A saved entry knows where it went; a marked or played one is looked for
+  // where it would have gone, which is the same rule.
   const path = entry.path ?? libraryPath(entry.pack, entry.name, settings().format);
 
   // The blob is this row's to release.
@@ -90,13 +77,13 @@ function SavedRow(
       return true;
     }
 
-    const bytes = await folderFile(path);
+    const file = await folderFile(path);
 
-    if (bytes == null) {
+    if (file == null) {
       return false;
     }
 
-    setUrl(URL.createObjectURL(new Blob([bytes], { type: mimeOf(path) })));
+    setUrl(URL.createObjectURL(file));
     return true;
   }
 

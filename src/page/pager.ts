@@ -1,98 +1,104 @@
-// Follows which listing splice.com is showing, and moves between them.
+// Follows the listing splice.com is showing, and turns its pages.
 //
-// Splice's server answers a logged-out `?page=` with the first page every time,
-// so a page is turned by writing the address into the history and drawing the
-// answer -- reloading would only undo it.
+// The page says what it shows through its address -- the search, the filters,
+// the sort, the page number are all query parameters -- and which rows it is
+// showing right now says whose they are: Splice's, drawn on its server, or
+// Splicedd's, drawn from Splice's answer to the same address.
+//
+// Both matter. A new address is a new listing to draw; the old address with
+// Splice's own rows back under it means Splice re-rendered the page, which a
+// listing Splicedd is responsible for has to be drawn over again.
 
-import { hasRows, pageSummary } from "./site";
+import { ROW_MARK, hasRows, isSearchListing, rows } from "./site";
 
 export interface PageState {
-  page: number;
-
-  /** Which listing this is: its address, minus anything that doesn't select. */
+  /** The address, less anything that doesn't change what the page lists. */
   search: string;
 
-  /** What the paginator says about where the page is, when there is one. */
-  summary: string | null;
+  /** Whether the address says what the page holds, so Splicedd can mirror it. */
+  mirrored: boolean;
+
+  /** Whether every row on the page is Splicedd's own. */
+  drawn: boolean;
 }
 
-const PAGE_PARAM = "page";
-
 export class Pager {
-  private state: PageState | null = null;
-  private readonly listeners = new Set<() => void>();
+  private readonly listeners = new Set<(state: PageState | null) => void>();
+  private current: PageState | null = null;
   private frame = 0;
 
-  /** Starts following the page, and returns the function that stops it. */
+  /** The current page, or null if the page isn't showing a listing. */
+  get state() {
+    return this.current;
+  }
+
+  /** Starts following the page, and returns the function that stops. */
   start() {
-    // A page turn replaces the list, so watching the document is watching the
-    // pagination -- with none of the guesswork about where the list lives.
     const observer = new MutationObserver(() => this.schedule());
     observer.observe(document.body, { childList: true, subtree: true });
 
-    window.addEventListener("popstate", this.schedule);
+    const onNavigate = () => this.schedule();
+    window.addEventListener("popstate", onNavigate);
+
     this.read();
 
     return () => {
       observer.disconnect();
-      window.removeEventListener("popstate", this.schedule);
-
+      window.removeEventListener("popstate", onNavigate);
       cancelAnimationFrame(this.frame);
-      this.listeners.clear();
     };
   }
 
-  readonly current = () => this.state;
-
-  readonly subscribe = (listener: () => void) => {
+  /** Calls back whenever the listing changes, and once now with what it is. */
+  onChange(listener: (state: PageState | null) => void) {
     this.listeners.add(listener);
-    return () => { this.listeners.delete(listener); };
-  };
+    listener(this.current);
 
-  /** Moves to another page of the same search, without leaving the document. */
+    return () => { this.listeners.delete(listener); };
+  }
+
+  /**
+   * Moves to another page of the same listing. Splice's router isn't asked to:
+   * its server answers a logged-out `?page=` with the first page whatever the
+   * number says, so the address is changed here and the listing redrawn from
+   * what Splicedd fetches for it.
+   */
   readonly open = (href: string) => {
-    window.history.pushState(null, "", href);
+    history.pushState(null, "", href);
     this.schedule();
   };
 
-  /** Splice re-renders in bursts; one read per frame is plenty. */
-  readonly schedule = () => {
+  private schedule() {
     cancelAnimationFrame(this.frame);
     this.frame = requestAnimationFrame(() => this.read());
-  };
+  }
 
   private read() {
     const next = hasRows() ? state() : null;
 
-    if (same(this.state, next)) {
+    if (same(this.current, next)) {
       return;
     }
 
-    this.state = next;
+    this.current = next;
 
     for (const listener of this.listeners) {
-      listener();
+      listener(next);
     }
   }
 }
 
 function state(): PageState {
   const url = new URL(window.location.href);
-  const page = currentPage();
-  const summary = pageSummary();
 
-  return { page, search: `${url.pathname}?${url.searchParams}`, summary };
-}
-
-function currentPage() {
-  const value = parseInt(new URL(window.location.href).searchParams.get(PAGE_PARAM) ?? "1", 10);
-  return Number.isFinite(value) && value > 0 ? value : 1;
+  return {
+    search: `${url.pathname}?${url.searchParams}`,
+    mirrored: isSearchListing(),
+    drawn: rows().every(row => row.hasAttribute(ROW_MARK))
+  };
 }
 
 function same(a: PageState | null, b: PageState | null) {
-  if (a == null || b == null) {
-    return a == b;
-  }
-
-  return a.page == b.page && a.search == b.search && a.summary == b.summary;
+  return a == b ||
+    (a != null && b != null && a.search == b.search && a.mirrored == b.mirrored && a.drawn == b.drawn);
 }

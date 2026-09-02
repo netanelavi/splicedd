@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 export interface ToastAction {
   label: string;
@@ -67,5 +67,9 @@ export function useToasts(): Toasts {
     setTimeout(() => dismiss(id), TOAST_LIFETIME);
   }, [dismiss]);
 
-  return { toasts, show, update, release, dismiss };
+  // One object per change, not per render: effects depend on this.
+  return useMemo(
+    () => ({ toasts, show, update, release, dismiss }),
+    [toasts, show, update, release, dismiss]
+  );
 }

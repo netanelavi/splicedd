@@ -32,15 +32,25 @@ export class SitePlayer {
     this.stop();
     this.mark(row, true);
 
-    const url = await preview();
+    try {
+      const url = await preview();
 
-    // Long enough to fetch and unscramble that the reader may have moved on.
-    if (this.row != row) {
-      return;
+      // Long enough to fetch and unscramble that the reader may have moved on.
+      if (this.row != row) {
+        return;
+      }
+
+      this.audio.src = url;
+      await this.audio.play();
+    } catch (err) {
+      // Nothing is playing, so nothing should say it is -- or the next press
+      // on the row would "stop" it instead of trying again.
+      if (this.row == row) {
+        this.stop();
+      }
+
+      throw err;
     }
-
-    this.audio.src = url;
-    await this.audio.play();
 
     this.follow();
   }

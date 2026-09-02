@@ -30,20 +30,32 @@ export async function fetchBytes(url: string): Promise<Bytes> {
     try {
       const resp = await fetch(url, { credentials: "omit" });
       if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
+        throw new HttpError(resp.status);
       }
 
       return new Uint8Array(await resp.arrayBuffer());
-    } catch {
-      // A cross-origin rejection isn't distinguishable from a network error
-      // here, so treat both as "this origin needs the worker" — the worker
-      // reports a real failure with a usable message anyway.
+    } catch (err) {
+      // An answer the host gave -- a URL that has expired, a file that isn't
+      // there -- is the answer, and the worker would get the same one. Only a
+      // request the page wasn't allowed to make at all is sent through it: a
+      // cross-origin refusal isn't distinguishable from a network failure
+      // here, and the worker reports the latter with a usable message anyway.
+      if (err instanceof HttpError) {
+        throw err;
+      }
+
       corsBlocked.add(origin);
     }
   }
 
   const { base64 } = await callWorker({ kind: "fetch-binary", url });
   return base64ToBytes(base64);
+}
+
+class HttpError extends Error {
+  constructor(status: number) {
+    super(`HTTP ${status}`);
+  }
 }
 
 export async function fetchJson<T>(url: string): Promise<T> {
@@ -80,13 +92,11 @@ export async function spliceGraphQL(endpoint: string, body: string): Promise<str
   }
 }
 
-/** Uploads bytes to the worker, which saves them to the user's download folder. */
-export async function saveFile(
-  bytes: Uint8Array, mime: string, filename: string, saveAs = false
-) {
+/** Uploads a file to the worker, which saves it to the user's download folder. */
+export async function saveFile(file: Blob, mime: string, filename: string, saveAs = false) {
   return await callWorker({
     kind: "save-file",
-    base64: bytesToBase64(bytes),
+    base64: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
     mime,
     filename,
     saveAs

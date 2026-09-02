@@ -1,6 +1,14 @@
 import { SpliceSortBy, SpliceSampleType, MusicKey, ChordType, SortOrder, SpliceTag } from "./entities";
 
-export const GRAPHQL_URL = "https://surfaces-graphql.splice.com/graphql"
+export const GRAPHQL_URL = "https://surfaces-graphql.splice.com/graphql";
+
+/**
+ * How long a sample's pre-signed URLs are trusted for. Splice signs them for a
+ * few hours; well inside that, anything older is asked for again rather than
+ * found to have expired -- which is what a tab left open overnight would
+ * otherwise run into on its first click.
+ */
+export const URL_LIFETIME = 30 * 60_000;
 
 /**
  * The sample search Splice's own web app runs, kept deliberately identical to

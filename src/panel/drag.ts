@@ -1,6 +1,5 @@
-import { DragEvent } from "react";
-
 import { assetUrl } from "../chrome/assets";
+
 /** What a drag needs to know about a file: not where it came from. */
 export interface DraggableFile {
   /** An object URL for the bytes, which is what the OS is handed. */
@@ -46,13 +45,3 @@ export function attachFileDrag(transfer: DataTransfer, file: DraggableFile) {
 }
 
 
-/**
- * Whether a drag began on a control rather than on the draggable row around it.
- * Buttons and waveforms mark themselves `data-no-drag`, and pressing one should
- * press it, not pick the row up.
- */
-export function startedOnControl(event: DragEvent) {
-  return event.nativeEvent
-    .composedPath()
-    .some(node => node instanceof HTMLElement && node.dataset.noDrag == "true");
-}

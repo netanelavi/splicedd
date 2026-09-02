@@ -5,23 +5,27 @@
 // opened fresh -- or paginated to -- has rows nobody's `fetch` ever carried.
 //
 // Those are found in two steps, both only ever taken for a row the user has
-// actually reached for. First Splicedd asks Splice the same question the page
-// is showing the answer to, which names every row on it at once; a row still
-// missing after that (a page whose filters this doesn't understand) is looked
-// up by its file name alone. Each step runs once per page and once per name.
+// actually reached for. First, on a search page, Splicedd asks Splice the same
+// question the page is showing the answer to, which names every row on it at
+// once; a row still missing after that (or on a page whose address doesn't say
+// what it holds) is looked up by its file name alone. Each step runs once per
+// page and once per name, for as long as the answer's URLs are good.
 
-import { SpliceSample } from "../splice/api";
+import { SpliceSample, URL_LIFETIME } from "../splice/api";
 import { DEFAULT_FILTERS, SampleFilters, SampleSearchResult } from "../splice/search";
 import { filtersFromLocation } from "./location";
 import { SampleIndex } from "./sampleIndex";
-import { SiteRow, perPage } from "./site";
+import { SiteRow, isSearchListing, perPage } from "./site";
+
+/** A lookup in flight or already done, and when it was started. */
+interface Lookup {
+  result: Promise<SampleSearchResult>;
+  at: number;
+}
 
 export class SampleResolver {
-  /** Lookups in flight or already done, so nothing is ever asked for twice. */
-  private readonly lookups = new Map<string, Promise<void>>();
-
-  /** What each listing looked at so far holds, keyed as the lookups are. */
-  private readonly results = new Map<string, SampleSearchResult>();
+  /** Lookups by what they asked, so nothing is ever asked for twice. */
+  private readonly lookups = new Map<string, Lookup>();
 
   /**
    * @param index What the page has already been sent.
@@ -37,11 +41,8 @@ export class SampleResolver {
    * on it. Both have to be asked for -- the page doesn't say how it pages, and
    * when it's logged out it doesn't page at all.
    */
-  async pageResult(): Promise<SampleSearchResult | null> {
-    const key = pageKey();
-    await this.lookUpPage();
-
-    return this.results.get(key) ?? null;
+  pageResult(): Promise<SampleSearchResult> {
+    return this.lookUpPage();
   }
 
   /**
@@ -55,7 +56,14 @@ export class SampleResolver {
 
   /** The sample a row shows, asking Splice for it if the page never did. */
   async resolve(row: SiteRow): Promise<SpliceSample> {
-    for (const lookup of [() => this.lookUpPage(), () => this.lookUpName(row.filename)]) {
+    // Only a search page's address says what the page holds; asking it of any
+    // other would name the wrong samples and cost a search doing so.
+    const lookups = [
+      ...(isSearchListing() ? [() => this.lookUpPage()] : []),
+      () => this.lookUpName(row.filename)
+    ];
+
+    for (const lookup of lookups) {
       const known = this.peek(row);
 
       if (known != null) {
@@ -76,14 +84,8 @@ export class SampleResolver {
 
   /** Runs the search the page itself is showing, naming every row on it. */
   private lookUpPage() {
-    const key = pageKey();
-
-    return this.once(key, async () => {
-      const result = await this.search(filtersFromLocation(new URL(window.location.href), perPage()));
-      this.results.set(key, result);
-
-      return result;
-    });
+    return this.once(pageKey(), () =>
+      this.search(filtersFromLocation(new URL(window.location.href), perPage())));
   }
 
   private lookUpName(filename: string) {
@@ -92,17 +94,27 @@ export class SampleResolver {
   }
 
   private once(key: string, run: () => Promise<SampleSearchResult>) {
-    let lookup = this.lookups.get(key);
+    const held = this.lookups.get(key);
 
-    if (lookup == null) {
-      lookup = run().then(result => { this.index.add(result.items); });
-
-      // A failure isn't an answer, so it isn't remembered as one.
-      lookup.catch(() => this.lookups.delete(key));
-      this.lookups.set(key, lookup);
+    // An answer is only as good as the URLs in it.
+    if (held != null && Date.now() - held.at < URL_LIFETIME) {
+      return held.result;
     }
 
-    return lookup;
+    const result = run().then(found => {
+      this.index.add(found.items);
+      return found;
+    });
+
+    // A failure isn't an answer, so it isn't remembered as one.
+    result.catch(() => {
+      if (this.lookups.get(key)?.result == result) {
+        this.lookups.delete(key);
+      }
+    });
+
+    this.lookups.set(key, { result, at: Date.now() });
+    return result;
   }
 }
 

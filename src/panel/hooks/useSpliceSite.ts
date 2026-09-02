@@ -17,12 +17,13 @@ import { errorMessage } from "../../chrome/messages";
 import { showProgress } from "../../page/list";
 import { SitePlayer } from "../../page/player";
 import { SampleResolver } from "../../page/resolver";
-import { folderHas } from "../../chrome/folder";
+import { ensureFolderAccess, folderHas } from "../../chrome/folder";
 import { SampleEntry, liked, played } from "../../chrome/lists";
 import {
-  PICK_MARK, QA, ROW_MARK, SITE_STYLES, SiteRow, controlOf, hook, isTyping, likedBy, markLibrary,
-  markLiked, markPicked, markRow, menuToggledBy, pageRequestedBy, permalinkOf, pickedRows,
-  playedBy, rowOf, seekedBy, sharedBy, siteRows
+  MENU_OPEN, PICK_MARK, QA, ROW_MARK, SITE_STYLES, SiteRow, closeMenus, controlOf, hook,
+  isSearchListing, isTyping, likedBy, markLibrary, markLiked, markPicked, markRow, menuToggledBy,
+  pageRequestedBy, permalinkOf, pickedRows, playedBy, rowOf, seekedBy, sharedBy, siteRows,
+  unmarkRows
 } from "../../page/site";
 import { SampleStore } from "../sampleStore";
 import { SampleActions } from "./useSampleActions";
@@ -66,6 +67,16 @@ export function useSpliceSite(
   useEffect(() => () => player.dispose(), [player]);
 
   /**
+   * The rows worth working on: every one of them on a listing Splicedd mirrors,
+   * and elsewhere only the ones the page has already named, since naming the
+   * rest would cost a search each before anyone has asked for anything.
+   */
+  const workRows = useCallback(() => {
+    const all = siteRows();
+    return isSearchListing() ? all : all.filter(row => resolver.peek(row) != null);
+  }, [resolver]);
+
+  /**
    * Renders a row's sample ahead of the drag that will need it: a drag payload
    * has to be attached the instant the drag begins, with nothing to await.
    */
@@ -93,7 +104,7 @@ export function useSpliceSite(
   const survey = useCallback(async () => {
     const marked = new Set((await liked.read()).map(x => x.uuid));
 
-    for (const row of siteRows()) {
+    for (const row of workRows()) {
       try {
         const sample = await resolver.resolve(row);
 
@@ -103,7 +114,7 @@ export function useSpliceSite(
         // A row nothing can name is a row nothing can be said about.
       }
     }
-  }, [resolver, store]);
+  }, [resolver, store, workRows]);
 
   /** Saves a run of rows one at a time, reporting as it goes. */
   const saveAll = useCallback(async (batch: SiteRow[]) => {
@@ -111,8 +122,14 @@ export function useSpliceSite(
       return;
     }
 
+    // Asked first, while the click still counts, and waited for before the
+    // first file is written; see the download action.
+    const access = ensureFolderAccess().catch(() => false);
+
     const progress = toasts.show(`Saving 1 of ${batch.length}...`, { sticky: true });
     let saved = 0;
+
+    await access;
 
     for (const [index, row] of batch.entries()) {
       toasts.update(progress, `Saving ${index + 1} of ${batch.length}...`);
@@ -137,12 +154,12 @@ export function useSpliceSite(
   }, [actions, resolver, toasts]);
 
   /**
-   * Prepares every row on the page, the one under the pointer first. Each is
-   * only ever prepared once: the store remembers what it has rendered, so this
-   * is cheap to call again whenever the listing changes.
+   * Prepares every row worth preparing, the one under the pointer first. Each
+   * is only ever prepared once: the store remembers what it has rendered, so
+   * this is cheap to call again whenever the listing changes.
    */
   const prepare = useCallback(async (first?: SiteRow) => {
-    const queue = [...(first == null ? [] : [first]), ...siteRows()];
+    const queue = [...(first == null ? [] : [first]), ...workRows()];
     const seen = new Set<HTMLElement>();
 
     const next = async () => {
@@ -155,7 +172,19 @@ export function useSpliceSite(
     };
 
     await Promise.all(Array.from({ length: AHEAD }, next));
-  }, [warm]);
+  }, [warm, workRows]);
+
+  /**
+   * Says again what is known about every row, after something that changes the
+   * answer: a new folder, or a new format, is a new set of files on disk and a
+   * new set of files to have ready.
+   */
+  const remark = useCallback(() => {
+    unmarkRows();
+
+    void survey();
+    void prepare();
+  }, [survey, prepare]);
 
   /** Starts a row playing, noting what it was. */
   const play = useCallback(async (row: SiteRow) => {
@@ -193,6 +222,12 @@ export function useSpliceSite(
   });
 
   useDocumentEvent("click", event => {
+    // A drawn row is a copy of Splice's markup and none of its behaviour, so
+    // the things Splice would have handled are handled here -- its menu first,
+    // since a click anywhere but on a menu's own button is how it is dismissed.
+    const menu = menuToggledBy(event.target);
+    closeMenus(menu ?? event.target);
+
     const requested = pageRequestedBy(event.target);
 
     // A modified click is the reader asking their browser for the link, not
@@ -205,14 +240,10 @@ export function useSpliceSite(
       return;
     }
 
-    // A drawn row is a copy of Splice's markup and none of its behaviour, so
-    // the things Splice would have handled are handled here.
-    const menu = menuToggledBy(event.target);
-
     if (menu != null) {
       event.preventDefault();
       event.stopPropagation();
-      menu.toggleAttribute("data-splicedd-open");
+      menu.toggleAttribute(MENU_OPEN);
 
       return;
     }
@@ -306,6 +337,11 @@ export function useSpliceSite(
     event.preventDefault();
     event.stopPropagation();
 
+    // The folder is asked for on the click itself, before the row is named:
+    // naming it can take a request, and the browser only re-asks for a
+    // folder while the click is still fresh.
+    void ensureFolderAccess().catch(() => false);
+
     resolver.resolve(row).then(actions.download, err => {
       toasts.show(`Couldn't find ${row.filename} on Splice: ${errorMessage(err)}`, { tone: "error" });
     });
@@ -317,8 +353,9 @@ export function useSpliceSite(
     }
 
     // Whatever the pointer is resting on, which is how a list is worked
-    // through without moving the hand back and forth to a button.
-    const row = hovered.current == null ? null : rowOf(hovered.current);
+    // through without moving the hand back and forth to a button. A row the
+    // page has since replaced is no longer anything to work on.
+    const row = hovered.current?.isConnected == true ? rowOf(hovered.current) : null;
 
     if (row == null) {
       return;
@@ -326,13 +363,15 @@ export function useSpliceSite(
 
     if (event.key == "d") {
       event.preventDefault();
+      void ensureFolderAccess().catch(() => false);
       void resolver.resolve(row).then(actions.download, () => {});
     } else if (event.key == "p") {
       event.preventDefault();
       row.element.querySelector<HTMLElement>(hook(QA.play))?.click();
-    } else if (event.key == "ArrowLeft" || event.key == "ArrowRight") {
+    } else if ((event.key == "ArrowLeft" || event.key == "ArrowRight") && player.playing(row.element)) {
       // Nudging along a sample, which is what the desktop app's waveform did
-      // for the arrow keys.
+      // for the arrow keys. Only while it plays: otherwise the keys are the
+      // page's, and scroll it.
       event.preventDefault();
       player.nudge(row.element, event.key == "ArrowRight" ? NUDGE : -NUDGE);
     } else if (event.key == "l") {
@@ -380,7 +419,10 @@ export function useSpliceSite(
   }, [saveAll]);
 
   // A fresh object every render would restart everything that depends on it.
-  return useMemo(() => ({ survey, saveBatch, prepare }), [survey, saveBatch, prepare]);
+  return useMemo(
+    () => ({ survey, saveBatch, prepare, remark }),
+    [survey, saveBatch, prepare, remark]
+  );
 }
 
 /** What a list keeps about a sample: enough to find it again without Splice. */

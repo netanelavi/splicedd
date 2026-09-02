@@ -111,6 +111,19 @@ export function hasRows(): boolean {
   return document.querySelector(hook(QA.row)) != null;
 }
 
+/** Splice's sample search, the one listing whose address says what it holds. */
+const SEARCH_PATH = /^\/sounds\/search\/samples\/?$/;
+
+/**
+ * Whether this page is the sample search. Only its address describes its
+ * listing: a pack's page or a sample's own lists samples in the same rows,
+ * but which ones is nowhere in the URL, and a search mirrored from it would
+ * hold the wrong samples.
+ */
+export function isSearchListing(): boolean {
+  return SEARCH_PATH.test(window.location.pathname);
+}
+
 export function rows(): HTMLElement[] {
   return [...document.querySelectorAll<HTMLElement>(hook(QA.row))];
 }
@@ -168,15 +181,6 @@ export function paginationAnchor(): { parent: Element; before: Element | null } 
 /** What Splice's own paginator says about where it is, e.g. `Page 3 of 343`. */
 export function pageSummary(): string | null {
   return document.querySelector(hook(QA.summary))?.textContent?.trim() ?? null;
-}
-
-/**
- * Splice's own previous/next link, when it has one to offer. Following the
- * site's own link keeps its router in charge, so the page changes the way it
- * would have anyway -- no reload, and the same scroll and history behaviour.
- */
-export function pageLink(direction: "prev" | "next"): HTMLAnchorElement | null {
-  return document.querySelector<HTMLAnchorElement>(`a${hook(QA[direction])}`);
 }
 
 /**
@@ -258,6 +262,22 @@ export const PICK_MARK = "data-splicedd-picked";
 
 /** Marks a row whose sample the reader has set aside. */
 export const LIKE_MARK = "data-splicedd-liked";
+
+/** Marks a drawn row's menu as open, since Splice's code isn't there to. */
+export const MENU_OPEN = "data-splicedd-open";
+
+/**
+ * Takes every mark off a row, for one about to be copied: a template that was
+ * hovered, marked or playing would hand all of that to every row made from it.
+ */
+export function clearMarks(row: HTMLElement) {
+  for (const mark of [HAVE_MARK, PICK_MARK, LIKE_MARK, `${ROW_MARK}-playing`]) {
+    row.removeAttribute(mark);
+  }
+
+  markRow(row, null);
+  row.querySelector(hook(QA.menu))?.removeAttribute(MENU_OPEN);
+}
 
 /**
  * The stylesheet Splicedd puts on splice.com.
@@ -421,7 +441,7 @@ export const SITE_STYLES = `
     display: none;
   }
 
-  [${ROW_MARK}] ${hook(QA.menu)}[data-splicedd-open] {
+  [${ROW_MARK}] ${hook(QA.menu)}[${MENU_OPEN}] {
     display: block;
     position: absolute;
     right: 0;
@@ -488,6 +508,20 @@ export function menuToggledBy(node: EventTarget | null): HTMLElement | null {
 }
 
 /**
+ * Closes every open menu a click didn't land in, which is what a menu does
+ * when the reader turns to something else.
+ */
+export function closeMenus(except: EventTarget | null) {
+  const inside = elementOf(except)?.closest(hook(QA.menu)) ?? null;
+
+  for (const menu of document.querySelectorAll(`[${MENU_OPEN}]`)) {
+    if (menu != inside) {
+      menu.removeAttribute(MENU_OPEN);
+    }
+  }
+}
+
+/**
  * Where along a row's waveform a click landed, as a fraction of its width --
  * which is where the reader is asking the sample to carry on from.
  */
@@ -511,11 +545,6 @@ export function likedBy(node: EventTarget | null): HTMLElement | null {
 
 export function markLiked(row: HTMLElement, liked: boolean) {
   row.toggleAttribute(LIKE_MARK, liked);
-}
-
-/** The row showing the sample with the given id, if it is on this page. */
-export function rowFor(uuid: string, rowsOf: (row: HTMLElement) => string | null) {
-  return rows().find(row => rowsOf(row) == uuid) ?? null;
 }
 
 /** The row whose "copy link" a click landed on, if it landed on one. */
@@ -545,6 +574,13 @@ export function siteRows(): SiteRow[] {
 /** Says a row's sample is already on disk, or is no longer. */
 export function markLibrary(row: HTMLElement, have: boolean) {
   row.toggleAttribute(HAVE_MARK, have);
+}
+
+/** Takes the ready mark off every row, for when a file ready is no longer the file wanted. */
+export function unmarkRows() {
+  for (const row of rows()) {
+    markRow(row, null);
+  }
 }
 
 export function markPicked(row: HTMLElement, picked: boolean) {

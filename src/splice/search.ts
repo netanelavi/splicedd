@@ -50,14 +50,6 @@ export const DEFAULT_FILTERS: SampleFilters = {
   page: 1
 };
 
-/** Whether anything but the free-text query narrows the search down. */
-export function hasActiveFilters(filters: SampleFilters) {
-  return filters.tags.length != 0 ||
-    filters.key != null || filters.chord != null ||
-    filters.bpm != null || filters.sampleType != "any" ||
-    filters.packUuid != null;
-}
-
 /** Builds the GraphQL request that answers the given filters. */
 export function buildSearchRequest(filters: SampleFilters): SpliceSearchRequest {
   const request = createSearchRequest(filters.query);

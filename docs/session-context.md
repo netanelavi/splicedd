@@ -150,28 +150,71 @@ reads a file off disk before ever fetching it again. `Panel.tsx` is settings plu
 - `cloneNode` does not clone listeners, which is exactly why the document-level listeners matter.
 - A root handle whose `name` is empty produced a leading `/` in the reported path.
 
+## The hardening pass
+
+A review of the whole codebase after the features were done, asked for as "make it always work". What
+it found and fixed, so none of it is re-found:
+
+- **A failed fetch was cached forever.** The store kept a rejected promise as the answer, so one network
+  blip made a sample permanently unpreparable. Every cached promise now forgets itself on rejection
+  (`sampleStore.ts`), and the resolver's lookups do the same.
+- **The cache was smaller than a page.** Forty entries against a hundred-row page evicted the first rows
+  while marking them ready. The limit is 120, and a file read back from the library is the `File` on disk
+  (no memory until read); a rendered one is held as a `Blob` only, no separate byte copy.
+- **Pre-signed URLs expire.** `URL_LIFETIME` (30 min, `api.ts`) governs both the index and the resolver:
+  older answers are asked for again rather than trusted.
+- **Only the search page is mirrored.** `isSearchListing()` (`site.ts`) gates drawing, the paginator and
+  the page-wide lookup. A pack page keeps Splice's rows; they still get the buttons and are named on demand.
+- **The mirror is checked before the takeover.** `RowList.matches()` requires at least half of Splice's own
+  rows to be in the search answer; otherwise the page is left alone and a toast explains why it doesn't
+  page. Order is allowed to differ (Splice ranked a moment earlier), contents are not.
+- **Splice re-rendering under the same address is redrawn.** `PageState.drawn` flips when Splice's own
+  rows reappear, which re-runs the listing effect. This is what the back button does through SvelteKit.
+- **The template is cleaned.** `clearMarks()` strips ready/have/liked/picked/playing marks and the playhead
+  from the cloned row; `learn()` re-learns from any fresh Splice row rather than keeping the first forever.
+- **The folder prompt is awaited.** `ensureFolderAccess()` is called synchronously on the click and its
+  promise is awaited before writing, so a prompt still open can't send the file to the browser's downloads.
+  In-flight requests are shared, so two clicks make one prompt.
+- **One IndexedDB connection**, kept and dropped on `versionchange`, instead of one per folder check.
+- **List writes take turns** (`StoredList.change`), so a play recorded during a save can't lose either.
+- Smaller: the player unmarks itself when a preview fails; a null duration keeps the whole audio instead
+  of none; arrow keys only seek while the row plays; a row missing one of the two buttons gets only that
+  one; the per-page select always offers the page's own size; the paginator isn't rebuilt for the same
+  page and address; menus close on an outside click; Escape closes the panel; the selection context
+  menu runs the search instead of opening the panel; the worker retries delivering a command to a page
+  still starting; `content.tsx` claims the page before its first await so two injections can't mount
+  twice; a reloaded extension reports itself instead of throwing from inside React.
+- Removed: `waveform.ts`, `hasActiveFilters`, `relativeKey`, `MIN_BPM`/`MAX_BPM`, `Spinner`, the unused
+  `busy`/`dragStart`/`prepare` actions, `startedOnControl`, `pageLink`, `rowFor`, `PageState.summary`.
+
+One thing to know when writing a test: Chrome re-hovers whatever appears under a resting cursor, and a
+hover asks for the row to be made ready. Park the mouse away from the rows before asserting that
+something was *not* prepared.
+
 ## The end-to-end runs
 
-`e2e/` holds six suites — **106 checks** — run against a route-mocked https://splice.com with the built
+`e2e/` holds seven suites — **132 checks** — run against a route-mocked https://splice.com with the built
 extension loaded. They are the gate on every change; run them all before pushing.
 
 ```bash
 yarn build
 cd e2e && npm install     # once
-npm test                  # all six, about six minutes
+npm test                  # all seven, about eight minutes
 CDN_CORS=0 node site.mjs  # again, forcing the worker relay path
 ```
 
 | Suite | | |
 |---|---|---|
 | `inject.mjs` | 58 | The buttons, the paginator, the drawn pages, the keys, the lists, the toasts. |
+| `listing.mjs` | 26 | Whose listing it is: a pack page, a mirror that doesn't match, Splice re-rendering, a fetch that fails once, a hundred-row page, Escape. |
 | `site.mjs` | 17 | Naming a server-rendered row, the menu, the heart, navigation. Honours `CDN_CORS=0`. |
 | `folder.mjs` | 15 | The chosen folder, paths, reuse of a file already on disk, dragging off disk. |
 | `tap.mjs` | 5 | The MAIN-world tap and the bridge. |
 | `privacy.mjs` | 8 | Each blocked tracker, and the setting putting them back. |
 | `settings.mjs` | 3 | The panel opening and its controls. |
 
-`fixtures.mjs` builds the fake Splice responses and exports `EXTENSION`, the built `dist/` next door.
+`fixtures.mjs` builds the fake Splice responses, the logged-out page, and exports `EXTENSION`, the built
+`dist/` next door.
 
 ## What is left
 

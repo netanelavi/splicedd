@@ -11,7 +11,7 @@
 // ours to write, and every one of them is named by a `data-qa` hook.
 
 import { SpliceSample, SpliceSamplePack } from "../splice/api";
-import { CLASSES, QA, ROW_MARK, hook, rows } from "./site";
+import { CLASSES, QA, ROW_MARK, clearMarks, hook, rows } from "./site";
 
 /** Where a tag on a row links: the same search, narrowed to that tag. */
 const TAG_PARAM = "tags";
@@ -24,18 +24,34 @@ const MIN_BAR = 1;
 /** How much of the waveform the part still to play is drawn at. */
 const AHEAD_ALPHA = 0.4;
 
+/** A waveform on screen: what it shows, and how far along it is. */
+interface Painted {
+  data: number[];
+  progress: number;
+}
+
 /**
  * The waveform behind each canvas, so it can be drawn again at a new position
- * without being fetched again. Weak, so a row that goes away takes its data
- * with it.
+ * or a new size without being fetched again. Weak, so a row that goes away
+ * takes its data with it.
  */
-const drawn = new WeakMap<HTMLCanvasElement, number[]>();
+const painted = new WeakMap<HTMLCanvasElement, Painted>();
 
 export class RowList {
   /** A row Splice drew, kept to make more of them. */
   private template: HTMLElement | null = null;
 
-  private container: HTMLElement | null = null;
+  /**
+   * A canvas drawn at one width has to be drawn again at another, or the bars
+   * stretch with it.
+   */
+  private readonly resized = new ResizeObserver(entries => {
+    for (const { target } of entries) {
+      if (target instanceof HTMLCanvasElement && !fits(target)) {
+        repaint(target);
+      }
+    }
+  });
 
   /**
    * @param waveform Reads the waveform Splice publishes for a sample.
@@ -43,20 +59,16 @@ export class RowList {
   constructor(private readonly waveform: (url: string) => Promise<number[]>) {}
 
   /**
-   * Remembers what one of Splice's own rows looks like. Called whenever the
-   * page changes, and keeps the first answer: once the list is Splicedd's, the
-   * rows in it are copies and copying a copy would drift.
+   * Remembers what one of Splice's own rows looks like, whenever one is on the
+   * page: Splice's latest row is the best template for Splice's page. A page
+   * whose rows are all Splicedd's keeps the one it has, since copying a copy
+   * would drift.
    */
   learn() {
-    if (this.template != null) {
-      return;
-    }
-
     const row = rows().find(x => !x.hasAttribute(ROW_MARK));
 
     if (row != null) {
-      this.template = row.cloneNode(true) as HTMLElement;
-      this.container = row.parentElement;
+      this.template = clean(row.cloneNode(true) as HTMLElement);
     }
   }
 
@@ -69,15 +81,28 @@ export class RowList {
     const drawn = rows();
 
     return drawn.length == samples.length && drawn.every((row, index) =>
-      row.hasAttribute(ROW_MARK) &&
-      row.querySelector(hook(QA.filename))?.textContent?.trim() == fileOf(samples[index].name));
+      row.hasAttribute(ROW_MARK) && nameOf(row) == fileOf(samples[index].name));
+  }
+
+  /**
+   * Whether Splice's own rows on the page belong to this listing: at least
+   * half of them are in it. Splice ranked a moment before Splicedd asked, so
+   * the order can differ; a page most of whose rows are missing was narrowed
+   * by something Splicedd didn't understand, and drawing over it would show
+   * the reader the very samples they had filtered out.
+   */
+  matches(samples: readonly SpliceSample[]) {
+    const own = rows().filter(row => !row.hasAttribute(ROW_MARK)).map(nameOf);
+    const listed = new Set(samples.map(sample => fileOf(sample.name)));
+
+    return own.length == 0 || own.filter(name => listed.has(name)).length * 2 >= own.length;
   }
 
   /** Replaces the listing with the given samples. */
   show(samples: readonly SpliceSample[]) {
     this.learn();
 
-    if (this.template == null || this.container == null || samples.length == 0) {
+    if (this.template == null || samples.length == 0) {
       return;
     }
 
@@ -89,6 +114,10 @@ export class RowList {
     existing[0]?.before(...drawn);
 
     for (const row of existing) {
+      for (const canvas of row.querySelectorAll("canvas")) {
+        this.resized.unobserve(canvas);
+      }
+
       row.remove();
     }
   }
@@ -122,7 +151,7 @@ export class RowList {
    * of Splicedd's own is what made a drawn page look like someone else's.
    */
   private drawWaveform(row: HTMLElement, sample: SpliceSample) {
-    const canvas = row.querySelector<HTMLCanvasElement>(`${hook(QA.waveform)} canvas`);
+    const canvas = canvasOf(row);
     const url = sample.files.find(x => x.asset_file_type_slug == "waveform")?.url;
 
     if (canvas == null || url == null) {
@@ -130,10 +159,19 @@ export class RowList {
     }
 
     this.waveform(url).then(data => {
-      drawn.set(canvas, data);
-      paintWaveform(canvas, data, 0);
+      painted.set(canvas, { data, progress: 0 });
+      repaint(canvas);
+      this.resized.observe(canvas);
     }, () => {});
   }
+}
+
+/** A Splice row as a template: its markup, and none of what was happening to it. */
+function clean(row: HTMLElement) {
+  clearMarks(row);
+  showProgressBar(row, 0);
+
+  return row;
 }
 
 function key(row: HTMLElement, sample: SpliceSample) {
@@ -206,6 +244,10 @@ function text(row: HTMLElement, name: string, value: string) {
   }
 }
 
+function nameOf(row: HTMLElement) {
+  return row.querySelector(hook(QA.filename))?.textContent?.trim() ?? "";
+}
+
 function duration(milliseconds: number) {
   const seconds = Math.round(milliseconds / 1000);
   return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, "0")}`;
@@ -215,17 +257,22 @@ function fileOf(name: string) {
   return name.split("/").pop() ?? name;
 }
 
+function canvasOf(row: HTMLElement) {
+  return row.querySelector<HTMLCanvasElement>(`${hook(QA.waveform)} canvas`);
+}
+
 /**
  * Shows how far through a row playback is, the two ways the two apps that came
  * before showed it: the waveform filled up to the playhead, which is what the
  * desktop app drew, and the thin bar under it, which is what Splice renders.
  */
 export function showProgress(row: HTMLElement, progress: number) {
-  const canvas = row.querySelector<HTMLCanvasElement>(`${hook(QA.waveform)} canvas`);
-  const data = canvas == null ? undefined : drawn.get(canvas);
+  const canvas = canvasOf(row);
+  const shown = canvas == null ? undefined : painted.get(canvas);
 
-  if (canvas != null && data != null) {
-    paintWaveform(canvas, data, progress);
+  if (canvas != null && shown != null) {
+    shown.progress = progress;
+    repaint(canvas);
   }
 
   showProgressBar(row, progress);
@@ -248,6 +295,23 @@ function showProgressBar(row: HTMLElement, progress: number) {
   bar.className = CLASSES.progress;
   bar.max = 1;
   bar.value = progress;
+}
+
+function repaint(canvas: HTMLCanvasElement) {
+  const shown = painted.get(canvas);
+
+  if (shown != null) {
+    paintWaveform(canvas, shown.data, shown.progress);
+  }
+}
+
+/** Whether the canvas's bitmap is the size of the box it is shown in. */
+function fits(canvas: HTMLCanvasElement) {
+  const ratio = window.devicePixelRatio || 1;
+
+  return canvas.clientWidth == 0 ||
+    (canvas.width == Math.round(canvas.clientWidth * ratio) &&
+      canvas.height == Math.round(canvas.clientHeight * ratio));
 }
 
 /**

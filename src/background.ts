@@ -21,19 +21,23 @@ const SETTINGS_MENU_ID = "splicedd-settings";
 // --- the toolbar button, the keyboard shortcut and the context menu ---
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: SEARCH_MENU_ID,
-    title: 'Find "%s" with Splicedd',
-    contexts: ["selection"],
-    documentUrlPatterns: SPLICE_TAB_URLS
-  });
+  // Cleared first: an update that finds its own items already there would
+  // fail to create them and leave the menu half-made.
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: SEARCH_MENU_ID,
+      title: 'Find "%s" on Splice',
+      contexts: ["selection"],
+      documentUrlPatterns: SPLICE_TAB_URLS
+    });
 
-  // On the toolbar icon itself, so the settings are reachable from the
-  // extension rather than only from inside a panel that has to be opened first.
-  chrome.contextMenus.create({
-    id: SETTINGS_MENU_ID,
-    title: "Splicedd settings",
-    contexts: ["action"]
+    // On the toolbar icon itself, so the settings are reachable from the
+    // extension rather than only from inside a panel that has to be opened first.
+    chrome.contextMenus.create({
+      id: SETTINGS_MENU_ID,
+      title: "Splicedd settings",
+      contexts: ["action"]
+    });
   });
 });
 
@@ -80,8 +84,12 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     void commandPanel(tab, { kind: "settings" });
   }
 
+  // A selection is searched for the way anything is on Splice: by going to
+  // the search. The page's own rows then carry Splicedd's buttons.
   if (info.menuItemId == SEARCH_MENU_ID && info.selectionText != null) {
-    void commandPanel(tab, { kind: "search", query: info.selectionText.trim() });
+    const url = `${SPLICE_SOUNDS_URL}?filepath=${encodeURIComponent(info.selectionText.trim())}`;
+
+    void (isSpliceTab(tab) ? chrome.tabs.update(tab.id, { url }) : chrome.tabs.create({ url }));
   }
 });
 
@@ -123,9 +131,14 @@ async function commandPanel(tab: chrome.tabs.Tab | undefined, command: PanelComm
   await deliver(tab.id, command);
 }
 
+/** How long, and how often, to keep offering a command to a page still starting. */
+const DELIVERY_ATTEMPTS = 30;
+const DELIVERY_INTERVAL = 100;
+
 async function deliver(tabId: number, command: PanelCommand) {
   try {
     await chrome.tabs.sendMessage(tabId, command);
+    return;
   } catch {
     // The tab predates the extension being installed or updated, so it has no
     // content scripts yet. Injecting them brings it up to date without a
@@ -134,7 +147,21 @@ async function deliver(tabId: number, command: PanelCommand) {
 
     await chrome.scripting.executeScript({ target, files: ["tap.js"], world: "MAIN" });
     await chrome.scripting.executeScript({ target, files: ["content.js"] });
-    await chrome.tabs.sendMessage(tabId, command);
+  }
+
+  // The page listens once it has read its settings, a moment after the script
+  // runs; a command sent before that would be a click that did nothing.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await chrome.tabs.sendMessage(tabId, command);
+      return;
+    } catch (err) {
+      if (attempt == DELIVERY_ATTEMPTS) {
+        throw err;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, DELIVERY_INTERVAL));
+    }
   }
 }
 
@@ -258,6 +285,12 @@ async function ensureOffscreenDocument() {
       url: "offscreen.html",
       reasons: [chrome.offscreen.Reason.BLOBS],
       justification: "Turns a decoded sample into a blob URL the downloads API can save to disk."
+    })
+    .catch(async err => {
+      // Two saves raced to create it and the other won, which is fine.
+      if (!await chrome.offscreen.hasDocument()) {
+        throw err;
+      }
     })
     .finally(() => { creatingOffscreen = null; });
 

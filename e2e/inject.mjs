@@ -11,7 +11,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { CDN, EXTENSION, makeAudio, scramble, searchResponse } from "./fixtures.mjs";
+import { CDN, EXTENSION, loggedOutPage, makeAudio, scramble, searchResponse } from "./fixtures.mjs";
 
 const PAGE_URL = "https://splice.com/sounds/search/samples?filepath=prec";
 const GRAPHQL = "https://surfaces-graphql.splice.com/graphql";
@@ -23,52 +23,7 @@ const CORS = {
   "access-control-allow-methods": "GET,POST,OPTIONS"
 };
 
-const row = filename => `
-<div role="presentation" class="asset-row svelte-1aewf11" data-qa="sampleAssetRow">
-  <div class="cell cell--playback" role="gridcell">
-    <button data-qa="playPausePlaybackButton" class="variant-transparent icon icon-only">play</button>
-  </div>
-  <div class="cell cell--filename svelte-1aewf11" role="gridcell">
-    <div data-qa="asset-filename" class="filename">${filename}</div>
-  </div>
-  <div class="cell cell--waveform" role="gridcell">
-    <button aria-label="play sample" class="invisible svelte-1v7zsf1">
-      <div class="waveform" data-qa="sounds.waveform-preview" style="width:160px;height:32px;color:#8f8">
-        <canvas width="160" height="32" style="width:160px;height:32px"></canvas>
-      </div>
-    </button>
-  </div>
-  <div class="cell cell--actions" role="gridcell">
-    <div class="asset-actions svelte-cmmuu7">
-      <form class="top-level-action svelte-cmmuu7" action="https://splice.com/plans">
-        <button type="button" class="variant-transparent icon-only icon-small" data-qa="license-button">License</button>
-        <button type="button" class="variant-transparent icon-only icon-small" data-qa="like-button">Like</button>
-      </form>
-      <div class="details svelte-12ybw6r">
-        <div><button class="menu-opener" aria-haspopup="true">...</button></div>
-        <div data-qa="menu-container">
-          <div class="menu-panel svelte-12ybw6r" data-qa="menu-panel" role="menu">
-            <ul>
-              <li role="presentation"><button data-qa="license-button">Get</button></li>
-              <li role="presentation"><button data-qa="share-button" role="menuitem">Copy link</button></li>
-              <li role="presentation"><a role="menuitem" href="https://splice.com/sounds/sample/${"c".repeat(64)}">Open in new tab</a></li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>`;
 
-const html = `<!doctype html><html lang="en" data-theme="light"><head><title>Search Samples | Splice</title></head>
-  <body style="background:#111;color:#eee;font-family:sans-serif">
-    <main>
-      <div role="grid">${row("prec_p1_0.wav")}${row("prec_p1_1.wav")}</div>
-      <div class="remaining-results"><p>Register for full access</p></div>
-    </main>
-    <div style="height:2500px"></div>
-    <section class="faq-section"><h3>FAQs</h3></section>
-  </body></html>`;
 
 const checks = [];
 const check = (name, ok, detail = "") => {
@@ -137,7 +92,7 @@ await context.route("**/*", async route => {
   }
 
   if (url.startsWith("https://splice.com/")) {
-    return route.fulfill({ status: 200, contentType: "text/html", body: html });
+    return route.fulfill({ status: 200, contentType: "text/html", body: loggedOutPage(["prec_p1_0.wav", "prec_p1_1.wav"]) });
   }
 
   return route.continue();

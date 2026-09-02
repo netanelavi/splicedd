@@ -41,7 +41,10 @@ export async function mp3ToWav(
 
   const trim = trimEncoderDelay && decoded.length < LARGE_SAMPLE_FRAMES;
   const start = trim ? ENCODER_DELAY_FRAMES : 0;
-  const end = trim
+
+  // Splice's length says where the audio ends and the encoder's padding
+  // begins; without one, all of it is kept rather than none of it.
+  const end = trim && durationMs > 0
     ? start + Math.round((durationMs / 1000) * decoded.sampleRate)
     : decoded.length;
 

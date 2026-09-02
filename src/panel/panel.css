@@ -381,15 +381,6 @@ button, input, select, textarea {
 
 /* --- misc --- */
 
-.sd-spinner {
-  animation: sd-spin 0.9s linear infinite;
-  color: var(--sd-muted);
-}
-
-@keyframes sd-spin {
-  to { transform: rotate(360deg); }
-}
-
 .sd-folder {
   display: inline-flex;
   align-items: center;

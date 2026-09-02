@@ -17,6 +17,13 @@ export interface Listed {
 }
 
 export class StoredList<T extends Listed> {
+  /**
+   * Changes take turns. Each one reads the list, alters it and writes it back,
+   * and two doing so at once -- a sample played as another is saved -- would
+   * have the second write over the first.
+   */
+  private turn: Promise<unknown> = Promise.resolve();
+
   constructor(private readonly key: string, private readonly limit: number) {}
 
   async read(): Promise<T[]> {
@@ -30,29 +37,35 @@ export class StoredList<T extends Listed> {
   }
 
   /** Adds an entry, moving one already listed back to the top. */
-  async add(entry: Omit<T, "at">) {
-    const kept = (await this.read()).filter(x => x.uuid != entry.uuid);
-    await this.write([{ ...entry, at: Date.now() } as T, ...kept]);
+  add(entry: Omit<T, "at">) {
+    return this.change(async () => {
+      const kept = (await this.read()).filter(x => x.uuid != entry.uuid);
+      await this.write([{ ...entry, at: Date.now() } as T, ...kept]);
+    });
   }
 
   /** Adds or removes an entry, and answers with whether it is now listed. */
-  async toggle(entry: Omit<T, "at">): Promise<boolean> {
-    const current = await this.read();
-    const kept = current.filter(x => x.uuid != entry.uuid);
+  toggle(entry: Omit<T, "at">): Promise<boolean> {
+    return this.change(async () => {
+      const current = await this.read();
+      const kept = current.filter(x => x.uuid != entry.uuid);
 
-    // Nothing was removed, so it wasn't listed, so this lists it.
-    const listed = kept.length == current.length;
+      // Nothing was removed, so it wasn't listed, so this lists it.
+      const listed = kept.length == current.length;
 
-    await this.write(listed ? [{ ...entry, at: Date.now() } as T, ...kept] : kept);
-    return listed;
+      await this.write(listed ? [{ ...entry, at: Date.now() } as T, ...kept] : kept);
+      return listed;
+    });
   }
 
-  async remove(uuid: string) {
-    await this.write((await this.read()).filter(x => x.uuid != uuid));
+  remove(uuid: string) {
+    return this.change(async () => {
+      await this.write((await this.read()).filter(x => x.uuid != uuid));
+    });
   }
 
-  async clear() {
-    await this.write([]);
+  clear() {
+    return this.change(() => this.write([]));
   }
 
   /** Calls back whenever the list changes, in this tab or any other. */
@@ -63,8 +76,22 @@ export class StoredList<T extends Listed> {
       }
     };
 
-    chrome.storage.onChanged.addListener(onChanged);
+    try {
+      chrome.storage.onChanged.addListener(onChanged);
+    } catch {
+      // The extension was reloaded underneath this page: there is nothing to
+      // listen to, and a list that never updates beats a view that fails.
+      return () => {};
+    }
+
     return () => chrome.storage.onChanged.removeListener(onChanged);
+  }
+
+  private change<R>(run: () => Promise<R>): Promise<R> {
+    const result = this.turn.then(run, run);
+    this.turn = result.catch(() => {});
+
+    return result;
   }
 
   private async write(entries: T[]) {

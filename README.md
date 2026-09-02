@@ -12,10 +12,15 @@ are the same ones the site makes, so nothing has to be worked around.
 
 ## What it does
 
-- **Drag straight into a DAW.** Grab a row and drop it on Ableton, FL Studio, Bitwig, Logic, a folder —
-  anywhere that accepts a dropped file. A drag has to hand the file over the instant it starts, so the
-  page is prepared ahead of you — every row decoded and converted in the background, a couple at a time —
-  and the first drag of any row works.
+- **Drag a row out of the page.** Grab a row and drop it on a folder, the desktop, or any application
+  that takes files from a browser. A drag has to hand the file over the instant it starts, so the page is
+  prepared ahead of you — every row decoded and converted in the background, a couple at a time — and the
+  first drag of any row works. One honest limit, which is the browser's and not Splicedd's: a web page
+  can only *promise* a file to another application, and most DAWs read a drop then and there and get
+  nothing from a promise. So the sample is saved into your folder the moment the drag begins, and when an
+  app refuses the drop, Splicedd says where the file is; point your DAW's own browser at that folder and
+  drag from there. (The desktop app could drop straight into a DAW because it was a native program; see
+  *Dragging into a DAW* below.)
 - **A download button and a drag handle on every row.** A logged-out Splice row has neither — just a
   licence button and a heart. Splicedd adds both, in Splice's own markup and using Splice's own sprite:
   the download saves a decoded WAV, and the drag hands your DAW the file rather than a link to Splice's
@@ -42,8 +47,8 @@ are the same ones the site makes, so nothing has to be worked around.
   deeply as the name goes. A sample already there is left alone and reused, so nothing is downloaded,
   decoded or written twice. Without a chosen folder, files go to the browser's download folder, in a
   folder of their own — where the browser gets the last word on the name. Either way the toast names the
-  exact path and offers to open it: *Show in folder* for a browser download, *Open* for a chosen folder,
-  which is as far as a browser will go once you have pointed it at one yourself.
+  exact path: *Show in folder* for a browser download, *Copy folder* for a chosen folder, which is as far
+  as a browser will go once you have pointed it at one yourself.
 - **Decodes what Splice serves.** Previews are scrambled; Splicedd unscrambles them and converts the
   result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
 - **Waveforms that follow the sound.** Painted into Splice's own canvas as its own bars, filling up to
@@ -68,6 +73,24 @@ are the same ones the site makes, so nothing has to be worked around.
   with the same failure for as long as the tab is open; a listing left open for hours asks Splice afresh
   rather than trusting URLs that have expired; a page of a hundred rows keeps all hundred ready. If the
   extension is updated underneath a page, the page says so instead of failing quietly.
+
+## Dragging into a DAW
+
+A browser cannot put a real file path into a drag. What Chrome offers another application is a
+*promise* of a file — it downloads the file when, and only when, the drop target asks for it after the
+drop. Windows Explorer, the desktop and a few others ask; nearly every DAW reads the drop synchronously,
+gets nothing, and shows nothing. This is the same reason Splice itself ships a desktop app for its
+"drag to DAW", and the reason the old Splicedd desktop app worked: a native program can write the file
+first and start an operating-system drag that carries the real path.
+
+What works today, reliably:
+
+1. Choose a folder in the settings — the folder your DAW's own browser already looks at is the best one.
+2. Download a sample, or drag it anywhere: either way it is written there under its own name.
+3. Drag it from the DAW's browser, or from Explorer, into the arrangement.
+
+A drop into a DAW straight from the page would need a small native helper alongside the extension — the
+desktop app, reduced to the one thing a browser can't do. It isn't part of Splicedd yet.
 
 ## Installing
 

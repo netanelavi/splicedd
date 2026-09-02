@@ -23,11 +23,12 @@ export interface SampleActions {
   saveNow: (sample: SpliceSample) => Promise<void>;
 
   /**
-   * Attaches a sample to a drag that has already begun, reporting whether it
-   * could. Splice's own rows are dragged through a plain DOM event, so this
-   * takes the transfer rather than a React one.
+   * Attaches a sample to a drag that has already begun, answering with the
+   * file it attached, or null if there was none to attach yet. Splice's own
+   * rows are dragged through a plain DOM event, so this takes the transfer
+   * rather than a React one.
    */
-  attachDrag: (transfer: DataTransfer, sample: SpliceSample) => boolean;
+  attachDrag: (transfer: DataTransfer, sample: SpliceSample) => SampleFile | null;
 }
 
 /** Everything the user can do with a sample once it's on screen. */
@@ -66,15 +67,12 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
       if (announce) {
         // A folder chosen through the browser can't be revealed in the file
         // manager -- only a download the browser itself made can be -- so what
-        // is offered instead is the file, opened, and the folder, copied.
+        // is offered instead is the folder, copied. Not the file "opened": a
+        // blob opened in a tab is a player, and a file saved from that player
+        // is named after the blob, which is an id.
         toasts.show(
           written.existed ? `${file.name} is already in your library` : `Saved ${written.path}`,
-          {
-            actions: [
-              { label: "Open", run: () => openFile(file) },
-              { label: "Copy folder", run: () => copyFolder(written.path, toasts) }
-            ]
-          }
+          { actions: [{ label: "Copy folder", run: () => copyFolder(written.path, toasts) }] }
         );
       }
 
@@ -143,7 +141,7 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     if (file == null) {
       void render(sample);
       toasts.show("Getting the sample ready - drag it again in a moment");
-      return false;
+      return null;
     }
 
     attachFileDrag(transfer, file);
@@ -154,20 +152,10 @@ export function useSampleActions(store: SampleStore, toasts: Toasts): SampleActi
     // what the desktop app did, since it dragged out of the library itself.
     void save(sample, file, false);
 
-    return true;
+    return file;
   }, [store, render, save, toasts]);
 
   return useMemo(() => ({ download, saveNow, attachDrag }), [download, saveNow, attachDrag]);
-}
-
-/**
- * Opens a saved sample in a tab of its own, which plays it. There is no way to
- * reveal a file in the file manager once it has been written through a folder
- * the reader chose: only a download the browser made itself can be shown, and
- * that is what the other toast offers.
- */
-function openFile(file: SampleFile) {
-  window.open(file.url, "_blank", "noopener");
 }
 
 /**

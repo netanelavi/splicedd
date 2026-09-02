@@ -25,7 +25,7 @@ import {
   pageRequestedBy, permalinkOf, pickedRows, playedBy, rowOf, seekedBy, sharedBy, siteRows,
   unmarkRows
 } from "../../page/site";
-import { SampleStore } from "../sampleStore";
+import { SampleFile, SampleStore } from "../sampleStore";
 import { SampleActions } from "./useSampleActions";
 import { Toasts } from "./useToasts";
 
@@ -383,6 +383,9 @@ export function useSpliceSite(
     }
   });
 
+  /** The file being dragged right now, for saying where it went if nothing took it. */
+  const dragging = useRef<SampleFile | null>(null);
+
   useDocumentEvent("dragstart", event => {
     if (controlOf(event.target) == null || event.dataTransfer == null) {
       return;
@@ -390,8 +393,9 @@ export function useSpliceSite(
 
     const row = rowOf(event.target);
     const sample = row == null ? null : resolver.peek(row);
+    const file = sample == null ? null : actions.attachDrag(event.dataTransfer, sample);
 
-    if (row == null || sample == null || !actions.attachDrag(event.dataTransfer, sample)) {
+    if (row == null || file == null) {
       // Nothing to hand over yet, so Splice's own drag is left to carry on.
       if (row != null) {
         void warm(row);
@@ -400,8 +404,25 @@ export function useSpliceSite(
       return;
     }
 
+    dragging.current = file;
+
     // Splice's handler would replace the payload with a link to its desktop app.
     event.stopPropagation();
+  });
+
+  // A browser can hand another application a file it has yet to write only
+  // as a promise, and most DAWs won't take one: they read the drop then and
+  // there, and get nothing. The sample was saved the moment the drag began,
+  // so the reader is told where it is instead of being left with nothing.
+  useDocumentEvent("dragend", event => {
+    const file = dragging.current;
+    dragging.current = null;
+
+    if (file != null && event.dataTransfer?.dropEffect == "none" && outsideWindow(event)) {
+      toasts.show(
+        `That app didn't take the drop. ${file.path} is saved in your Splicedd folder; drag it from there`
+      );
+    }
   });
 
   /** Saves the rows picked out with `x`, or the whole page if none are. */
@@ -440,6 +461,17 @@ export function entryOf(sample: SpliceSample): Omit<SampleEntry, "at"> {
 /** Whether the reader asked their browser for the link rather than for the page. */
 function modified(event: MouseEvent) {
   return event.button != 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+}
+
+/**
+ * Whether a drag ended outside the browser's own window -- on another
+ * application, rather than back on the page or cancelled. A drop nothing took
+ * inside the window is the reader changing their mind, not an app refusing.
+ */
+function outsideWindow(event: DragEvent) {
+  return event.screenX < window.screenX || event.screenY < window.screenY ||
+    event.screenX > window.screenX + window.outerWidth ||
+    event.screenY > window.screenY + window.outerHeight;
 }
 
 /**

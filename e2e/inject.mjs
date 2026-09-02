@@ -202,6 +202,32 @@ check(
   payload.slice(0, 70)
 );
 
+// --- a drop no application took ---
+
+const dragEnd = (init) => page.evaluate(init => {
+  const button = document.querySelector('[data-qa="sampleAssetRow"] [data-qa="drag-button"]');
+  const transfer = new DataTransfer();
+
+  button.dispatchEvent(new DragEvent("dragstart", { bubbles: true, composed: true, dataTransfer: transfer }));
+  button.dispatchEvent(new DragEvent("dragend", { bubbles: true, composed: true, dataTransfer: transfer, ...init }));
+
+  return [...document.getElementById("splicedd-panel-host").shadowRoot.querySelectorAll(".sd-toast p")]
+    .map(x => x.textContent);
+}, init);
+
+check(
+  "a drag dropped back on the page says nothing",
+  !(await dragEnd({ screenX: 200, screenY: 200 })).some(x => x.includes("didn't take the drop"))
+);
+
+const refused = await dragEnd({ screenX: -300, screenY: -300 });
+
+check(
+  "a drag an application refused says where the file is instead",
+  refused.some(x => /didn't take the drop\. .*prec_p1_0\.wav is saved/.test(x)),
+  JSON.stringify(refused)
+);
+
 // --- and they survive Splice re-rendering the row ---
 
 await page.evaluate(() => {

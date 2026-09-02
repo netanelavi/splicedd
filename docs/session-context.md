@@ -128,6 +128,16 @@ reads a file off disk before ever fetching it again. `Panel.tsx` is settings plu
 - **A drag carries one file.** Chromium's `DataTransfer.setData("DownloadURL", …)` takes a single
   `mime:filename:url`, and the payload must be attached synchronously in `dragstart`. Multi-sample drag
   cannot exist; *Save this page* is the answer to it.
+- **A drag into a DAW cannot work from a web page.** On Windows, Chrome exposes `DownloadURL` as a
+  delayed-render `CF_HDROP` and refuses `GetData` while the drag loop runs (`in_drag_loop_` in
+  `os_exchange_data_provider_win.cc`); only an async-capable target (Explorer, Outlook) gets the file. DAWs
+  read the drop synchronously and get nothing. The Tauri app worked because it wrote the file and called
+  `tauri-plugin-drag` with the real path. The only real fix is a native messaging helper that does the
+  same; it is proposed, not built. Meanwhile the sample is saved when the drag begins and a refused drop
+  (dropEffect `none`, ended outside the window) tells the reader where it is.
+- **Never offer to "open" a blob.** A blob in a tab is Chrome's media player, and a file saved from that
+  player is named after the blob: `<uuid>.wav`. That was the second sighting of UUID-named files; the
+  first was blamed on `text/uri-list`. The toast for a chosen folder offers *Copy folder* only.
 - **A folder chosen through the File System Access picker has no path.** It exposes a name and a handle,
   never a location on disk, and cannot be revealed in the file manager. Hence *Open* and *Copy folder*
   for a chosen folder, and *Show in folder* only for a browser download.
@@ -193,7 +203,7 @@ something was *not* prepared.
 
 ## The end-to-end runs
 
-`e2e/` holds seven suites — **132 checks** — run against a route-mocked https://splice.com with the built
+`e2e/` holds seven suites — **134 checks** — run against a route-mocked https://splice.com with the built
 extension loaded. They are the gate on every change; run them all before pushing.
 
 ```bash
@@ -205,7 +215,7 @@ CDN_CORS=0 node site.mjs  # again, forcing the worker relay path
 
 | Suite | | |
 |---|---|---|
-| `inject.mjs` | 58 | The buttons, the paginator, the drawn pages, the keys, the lists, the toasts. |
+| `inject.mjs` | 60 | The buttons, the paginator, the drawn pages, the keys, the lists, the toasts, a refused drop. |
 | `listing.mjs` | 26 | Whose listing it is: a pack page, a mirror that doesn't match, Splice re-rendering, a fetch that fails once, a hundred-row page, Escape. |
 | `site.mjs` | 17 | Naming a server-rendered row, the menu, the heart, navigation. Honours `CDN_CORS=0`. |
 | `folder.mjs` | 15 | The chosen folder, paths, reuse of a file already on disk, dragging off disk. |

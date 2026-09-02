@@ -134,8 +134,8 @@ const message = (await toast.first().textContent()) ?? "";
 check("the download reports the folder it went to", message.startsWith("Saved "), message);
 
 check(
-  "and offers to open what it saved",
-  await page.locator(".sd-toast").first().locator("button", { hasText: "Open" }).count() == 1
+  "and doesn't offer to open the blob, which a player would save under an id",
+  await page.locator(".sd-toast").first().locator("button", { hasText: "Open" }).count() == 0
 );
 
 await page.locator(".sd-toast").first().locator("button", { hasText: "Copy folder" }).click();

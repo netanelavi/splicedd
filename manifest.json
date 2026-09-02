@@ -1,0 +1,88 @@
+{
+  "manifest_version": 3,
+  "name": "Splicedd",
+  "version": "3.0.0",
+  "description": "Search, preview, download and drag Splice samples straight into your DAW \u2014 from inside splice.com.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "32": "icons/icon-32.png",
+    "128": "icons/icon-128.png",
+    "256": "icons/icon-256.png"
+  },
+  "action": {
+    "default_title": "Toggle the Splicedd panel (Alt+S)",
+    "default_icon": {
+      "32": "icons/icon-32.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://splice.com/*",
+        "https://www.splice.com/*"
+      ],
+      "js": [
+        "tap.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://splice.com/*",
+        "https://www.splice.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "toggle-panel": {
+      "suggested_key": {
+        "default": "Alt+S"
+      },
+      "description": "Toggle the Splicedd panel"
+    }
+  },
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "downloads",
+    "offscreen",
+    "contextMenus",
+    "scripting",
+    "declarativeNetRequest"
+  ],
+  "host_permissions": [
+    "https://splice.com/*",
+    "https://*.splice.com/*",
+    "https://*.amazonaws.com/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*"
+      ],
+      "matches": [
+        "https://splice.com/*",
+        "https://www.splice.com/*"
+      ]
+    }
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "analytics",
+        "enabled": true,
+        "path": "rules/analytics.json"
+      }
+    ]
+  }
+}

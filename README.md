@@ -1,12 +1,209 @@
-# <img src="./src-tauri/icons/128x128.png" width="64"/> splicedd
-**Splicedd** is an alternative frontend for the popular [Splice](https://splice.com/features/sounds) sample library. It does not require any kind of authentication, and contains all of the most important features of the regular desktop app (including drag-and-drop).
+<img src="./icons/icon-128.png" width="64"/>
 
-<p align="center">
-  <a href="https://github.com/ascpixi/splicedd/releases/"><code>click here to download the latest release!</code></a>
-  <br><br>
-  <img src="./etc/screenshot.png">
-</p>
+# Splicedd
 
-Basic demo  | Drum loop demo 
-------------|---------------
-<video src="https://github.com/ascpixi/splicedd/assets/44982772/4406e3a2-1361-4198-baf9-cca5b4fb62af"> | <video src="https://github.com/ascpixi/splicedd/assets/44982772/02dda4ce-d61c-4240-8759-bbd18c31de24">
+**Splicedd** is a Chrome extension that makes [splice.com](https://splice.com/features/sounds) work the way
+you want it to. It adds nothing to look at: Splice's own rows get a download button and a *Drag to DAW*
+handle that do the real thing, its listing gets a paginator that actually pages, and its sign-up prompts
+and analytics go away. The only window of Splicedd's own holds four settings.
+
+It needs no account of its own and no desktop app. Because it runs inside the Splice page, its requests
+are the same ones the site makes, so nothing has to be worked around.
+
+## What it does
+
+- **Drag a row out of the page.** Grab a row and drop it on a folder, the desktop, or any application
+  that takes files from a browser. A drag has to hand the file over the instant it starts, so the page is
+  prepared ahead of you — every row decoded and converted in the background, a couple at a time — and the
+  first drag of any row works. One honest limit, which is the browser's and not Splicedd's: a web page
+  can only *promise* a file to another application, and most DAWs read a drop then and there and get
+  nothing from a promise. So the sample is saved into your folder the moment the drag begins, and when an
+  app refuses the drop, Splicedd says where the file is; point your DAW's own browser at that folder and
+  drag from there. (The desktop app could drop straight into a DAW because it was a native program; see
+  *Dragging into a DAW* below.)
+- **A download button and a drag handle on every row.** A logged-out Splice row has neither — just a
+  licence button and a heart. Splicedd adds both, in Splice's own markup and using Splice's own sprite:
+  the download saves a decoded WAV, and the drag hands your DAW the file rather than a link to Splice's
+  desktop app. Where Splice draws its own (a subscriber's row), those are taken over instead, and holding
+  <kbd>Alt</kbd> while clicking still reaches Splice's, which is the licensed file.
+- **Paging that actually pages.** A logged-out listing shows one page and ends in an invitation to
+  register; asking Splice's server for `?page=2` returns the first page again. So Splicedd asks Splice's
+  API how far the search really runs, builds the paginator Splice would have — first, previous, numbered
+  pages, next, last, page size, *Page N of M* — and draws every page itself, the first one included, in
+  Splice's own row markup and without a reload. A listing that changed hands halfway down would behave
+  two different ways; this one behaves one way throughout. It only takes over a listing it can
+  reproduce: if Splice's own rows aren't what the search returns, the address narrowed them by something
+  Splicedd doesn't understand, and the page is left as Splice drew it, with a word about why it doesn't
+  page. A pack's page, whose address doesn't say what it lists, is Splice's to draw too — its rows still
+  get the buttons.
+- **The sign-up prompts taken down.** The `+` that licenses a sample with a credit, the *+ N more samples*
+  standing in for the rest of the results with *Register for full access* under it, the marketing footer,
+  and the *Rare Finds* button that looks like a filter but opens a blog post. It's a stylesheet rule
+  rather than a deletion, so the *Hide the upsells* setting puts them straight back — which is what a
+  subscriber wants, since the licence button is how a sample is bought. The navigation bar and the row
+  menus are left alone.
+- **Saves where you say, under its own name.** Point Splicedd at a folder once and every sample is written
+  straight into it, at exactly the path the desktop app used — `Pack_Name/sample_name.wav`, nested as
+  deeply as the name goes. A sample already there is left alone and reused, so nothing is downloaded,
+  decoded or written twice. Without a chosen folder, files go to the browser's download folder, in a
+  folder of their own — where the browser gets the last word on the name. Either way the toast names the
+  exact path: *Show in folder* for a browser download, *Copy folder* for a chosen folder, which is as far
+  as a browser will go once you have pointed it at one yourself.
+- **Decodes what Splice serves.** Previews are scrambled; Splicedd unscrambles them and converts the
+  result to a 16-bit WAV, trimming the silence MP3 encoders add so loops start on the beat.
+- **Waveforms that follow the sound.** Painted into Splice's own canvas as its own bars, filling up to
+  the playhead as the desktop app drew it, with the thin bar underneath that Splice renders — in Splice's
+  own class, so Splice's stylesheet colours it. Click anywhere along it to carry on from there;
+  <kbd>←</kbd> and <kbd>→</kbd> nudge.
+- **A heart that needs no account.** Splice's own opens a sign-up dialog when you're logged out; Splicedd
+  answers it itself and keeps the list. Alt-click still reaches Splice's, for whoever has a subscription.
+- **Four lists of its own**, in the panel: **Saved**, **Liked**, **Played** — everything you listened to,
+  kept or not — and **Searches**, every listing you looked at with what it returned, one click from being
+  back on it. A sample in any of them drags straight into your DAW, read off your own disk rather than
+  fetched again, which also means it works long after the page it came from has gone.
+- **Save a whole page.** *Save this page* beside the paginator saves every row on it, or just the ones
+  picked out with <kbd>x</kbd>. Rows already in your library say so before you touch them.
+- **Keys, on the row under the pointer.** <kbd>d</kbd> downloads it, <kbd>p</kbd> plays it, <kbd>l</kbd>
+  marks it, <kbd>x</kbd> picks it out for a batch, <kbd>←</kbd>/<kbd>→</kbd> move through it. Ignored
+  while you're typing.
+- **Right-click the toolbar icon** for *Splicedd settings* — which opens splice.com if you aren't there
+  yet, and lands on them. The toolbar icon itself, or <kbd>Alt</kbd>+<kbd>S</kbd>, does the same; <kbd>Esc</kbd>
+  closes them. Select any text on splice.com and right-click for *Find "…" on Splice*, which runs the search.
+- **Keeps working.** A preview that failed to fetch once is asked for again the next time, not answered
+  with the same failure for as long as the tab is open; a listing left open for hours asks Splice afresh
+  rather than trusting URLs that have expired; a page of a hundred rows keeps all hundred ready. If the
+  extension is updated underneath a page, the page says so instead of failing quietly.
+
+## Dragging into a DAW
+
+A browser cannot put a real file path into a drag. What Chrome offers another application is a
+*promise* of a file — it downloads the file when, and only when, the drop target asks for it after the
+drop. Windows Explorer, the desktop and a few others ask; nearly every DAW reads the drop synchronously,
+gets nothing, and shows nothing. This is the same reason Splice itself ships a desktop app for its
+"drag to DAW", and the reason the old Splicedd desktop app worked: a native program can write the file
+first and start an operating-system drag that carries the real path.
+
+What works today, reliably:
+
+1. Choose a folder in the settings — the folder your DAW's own browser already looks at is the best one.
+2. Download a sample, or drag it anywhere: either way it is written there under its own name.
+3. Drag it from the DAW's browser, or from Explorer, into the arrangement.
+
+A drop into a DAW straight from the page would need a small native helper alongside the extension — the
+desktop app, reduced to the one thing a browser can't do. It isn't part of Splicedd yet.
+
+## Installing
+
+Chrome doesn't allow installing an extension from a file, so it's loaded unpacked:
+
+```bash
+yarn install
+yarn build
+```
+
+1. Open `chrome://extensions` and turn on **Developer mode**.
+2. Choose **Load unpacked** and pick the `dist/` folder.
+3. Open [splice.com](https://splice.com/sounds/search/samples). The rows carry the new buttons straight
+   away; the settings are behind the toolbar icon, or <kbd>Alt</kbd>+<kbd>S</kbd>.
+
+Works in any Chromium browser with Manifest V3 support: Chrome, Edge, Brave, Opera, Arc.
+
+## Settings
+
+There are four, and that is the point — anything the desktop app did one way and nobody ever changed is
+simply done that way. Samples go in a folder named after their pack, the encoder delay is trimmed, and a
+dragged sample joins the library. How many rows a page holds is chosen on Splice's page, where it belongs.
+
+| Setting | What it does |
+|---|---|
+| Save samples to | A folder you pick. Splicedd writes into it directly, so names and folders are exact. Without one, `Downloads/Splicedd`. |
+| Format | `WAV` (16-bit, what DAWs want) or `MP3` exactly as Splice encoded it. |
+| Hide the upsells | Takes down Splice's subscribe prompts. Off keeps the licence buttons. |
+| Block analytics | Stops splice.com reporting what you browse and play to its trackers. |
+
+## How it works
+
+```
+splice.com page
+├── tap.js ── in the page's own JavaScript world
+│     └── wraps fetch, and forwards a copy of what Splice asks for
+│
+├── content.js ── the work, plus a settings panel in a shadow root
+│     ├── adds a download button and a drag handle to every row
+│     ├── draws the pages Splice won't serve, in Splice's own markup
+│     ├── names the sample the page is playing, from what the tap saw
+│     ├── unscrambles previews and converts them to WAV (Web Audio)
+│     └── attaches the file to the drag as a Chromium `DownloadURL`
+│
+└── background.js ── service worker
+      ├── fetches assets whose host refuses the splice.com origin
+      ├── saves files through chrome.downloads
+      └── offscreen.html mints the blob URLs a worker can't create itself
+```
+
+Five details are worth knowing:
+
+- **Running inside the page is the whole trick.** Splice's API sits behind Cloudflare's bot management and
+  a CORS policy that only trusts splice.com. A request made from the page satisfies both.
+- **Watching beats asking.** Splice signs a fresh preview URL into every response it sends its own player.
+  Reading those responses as they arrive means Splicedd already holds the URL for anything you play, knows
+  exactly what you're looking at, and adds no traffic. The tap returns every response to the page
+  untouched; it copies, it never intercepts.
+- **One file knows Splice's markup.** `src/page/site.ts` reads the `data-qa` hooks Splice puts on its own
+  UI for its tests — `sampleAssetRow`, `download-button`, `drag-button`, `asset-filename`, the pagination.
+  Class names are Svelte build hashes that change with every deploy; these describe what the element *is*.
+  Nothing is bound to a row either: the listeners sit on the document and work out what they're looking at
+  when an event arrives, so Splice can re-render, paginate and navigate freely. A row Splice rendered on
+  its server, which no `fetch` ever carried, is named by running the search the page's own address
+  describes — one request for the whole page, and only once the user reaches for a row.
+- **A drag payload must be attached synchronously**, so a sample is converted while you hover and press
+  the mouse, before the drag begins. If you beat it to it, the panel says so and the next drag works.
+- **Nothing leaves your browser.** There's no server, no analytics, no account. The extension talks to
+  Splice and to your download folder, and that's all — and with *Block analytics* on, Splice's own
+  trackers don't get to talk either. That's a `declarativeNetRequest` ruleset rather than anything in the
+  page, so it covers a beacon sent on unload and a tracking pixel as well as a `fetch`, and it runs before
+  any of Splice's code does. Every rule is scoped to requests splice.com starts; nothing else you browse
+  is touched.
+
+## Development
+
+```bash
+yarn dev         # rebuild on change; reload the extension in chrome://extensions
+yarn build       # production build into dist/
+yarn typecheck   # tsc --noEmit
+yarn zip         # a packaged splicedd-chrome-extension.zip
+```
+
+Source layout:
+
+| Path | |
+|---|---|
+| `src/splice/` | The Splice domain, free of any browser-extension concern: the search API and its filters, reading samples out of a response, the preview decoder, MP3-to-WAV conversion, sample paths. |
+| `src/page/` | splice.com itself: the tap that watches its requests from the page's own world, the index of what it has been sent, the one module that knows its markup, and what Splicedd adds to it — the row buttons, the paginator, the listing it draws and the player behind it. |
+| `src/chrome/` | The extension platform: settings, messaging, network access, the folder samples are written to, and the two lists Splicedd keeps of its own. |
+| `src/panel/` | What runs in the page: the sample cache, the actions on a sample, and the settings panel. |
+| `src/background.ts`, `src/offscreen.ts`, `src/content.tsx`, `src/page/tap.ts` | The four entry points the manifest names. |
+| `e2e/` | Seven end-to-end runs against a mocked splice.com with the built extension loaded — the buttons and pages, whose listing it is, naming a row, the download folder, the tap, the blocked trackers, the panel. |
+
+```bash
+yarn build
+cd e2e && npm install   # once
+npm test                # all seven
+```
+
+[`docs/session-context.md`](docs/session-context.md) says how the extension came to be built this way:
+the decisions and their reasons, what is known to be impossible, and the traps already fallen into.
+
+## Permissions, and why
+
+| Permission | Why |
+|---|---|
+| `splice.com`, Splice's asset hosts | Search, and fetching the sample previews themselves. |
+| `downloads` | Saving samples, and *Show in folder*. |
+| `storage` | Your settings. |
+| `offscreen` | Building the blob a download needs; a service worker can't. |
+| `contextMenus`, `scripting` | The right-click search, the settings entry on the toolbar icon, and reaching tabs opened before the extension was installed. |
+| `declarativeNetRequest` | Blocking splice.com's analytics. Block rules need no access to the hosts they block, and none is asked for. |
+
+Splicedd downloads the same public preview files splice.com plays in your browser. Previews are not
+licensed sample files: if a sample makes it into something you release, license it on Splice.

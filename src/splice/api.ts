@@ -1,24 +1,158 @@
-import { SpliceSortBy, SpliceSampleType, MusicKey, ChordType, SpliceTag } from "./entities";
+import { SpliceSortBy, SpliceSampleType, MusicKey, ChordType, SortOrder, SpliceTag } from "./entities";
 
-export const GRAPHQL_URL = "https://surfaces-graphql.splice.com/graphql"
+export const GRAPHQL_URL = "https://surfaces-graphql.splice.com/graphql";
 
 /**
- * Creates a plain search query, with its only constraint being the filename, as provided
- * via the `query` argument.
+ * How long a sample's pre-signed URLs are trusted for. Splice signs them for a
+ * few hours; well inside that, anything older is asked for again rather than
+ * found to have expired -- which is what a tab left open overnight would
+ * otherwise run into on its first click.
+ */
+export const URL_LIFETIME = 30 * 60_000;
+
+/**
+ * The sample search Splice's own web app runs, kept deliberately identical to
+ * theirs: the same operation name, the same filter shape, the same fields. An
+ * older shape stops working the moment they retire it, and a request that
+ * doesn't look like the site's own is the kind of thing bot management notices.
+ *
+ * Trimmed only of the inline fragments for asset types this filter can't return
+ * (presets, packs, MIDI), since it asks for samples.
+ */
+const SAMPLES_SEARCH = `query SamplesSearch($attributes: [AssetAttributeSlug!], $parent_asset_uuid: GUID, $query: String, $order: SortOrder = DESC, $sort: AssetSortType = popularity, $random_seed: String, $tags: [ID], $key: String, $chord_type: String, $bpm: String, $min_bpm: Int, $max_bpm: Int, $limit: Int = 50, $asset_category_slug: AssetCategorySlug, $page: Int = 1, $ac_uuid: String, $parent_asset_type: AssetTypeSlug, $licensed: Boolean, $liked: Boolean, $filepath: String, $query_strategy: AssetSearchQueryStrategy, $popularity_weight: Float) {
+  assetsSearch(
+    filter: {attributes: $attributes, legacy: true, published: true, asset_type_slug: sample, query: $query, filepath: $filepath, tag_ids: $tags, key: $key, chord_type: $chord_type, bpm: $bpm, min_bpm: $min_bpm, max_bpm: $max_bpm, asset_category_slug: $asset_category_slug, ac_uuid: $ac_uuid, licensed: $licensed, liked: $liked, query_strategy: $query_strategy, popularity_weight: $popularity_weight}
+    children: {parent_asset_uuid: $parent_asset_uuid}
+    pagination: {page: $page, limit: $limit}
+    sort: {sort: $sort, order: $order, random_seed: $random_seed}
+    legacy: {parent_asset_type: $parent_asset_type}
+  ) {
+    ...assetDetails
+    __typename
+  }
+}
+
+fragment assetDetails on AssetPage {
+  ...assetPageItems
+  ...assetTagSummaries
+  pagination_metadata {
+    currentPage
+    totalPages
+    __typename
+  }
+  response_metadata {
+    records
+    __typename
+  }
+  __typename
+}
+
+fragment assetPageItems on AssetPage {
+  items {
+    ... on IAsset {
+      asset_type_slug
+      liked
+      licensed
+      uuid
+      name
+      tags {
+        uuid
+        label
+        __typename
+      }
+      files {
+        uuid
+        name
+        hash
+        path
+        asset_file_type_slug
+        url
+        __typename
+      }
+      __typename
+    }
+    ... on IAssetChild {
+      parents(filter: {asset_type_slug: pack}) {
+        items {
+          ... on PackAsset {
+            permalink_slug
+            permalink_base_url
+            uuid
+            name
+            provider {
+              permalink_slug
+              __typename
+            }
+            files {
+              uuid
+              path
+              asset_file_type_slug
+              url
+              __typename
+            }
+            __typename
+          }
+          __typename
+        }
+        __typename
+      }
+      __typename
+    }
+    ... on SampleAsset {
+      bpm
+      chord_type
+      key
+      duration
+      uuid
+      name
+      asset_category_slug
+      catalog_uuid
+      attributes
+      __typename
+    }
+    __typename
+  }
+  __typename
+}
+
+fragment assetTagSummaries on AssetPage {
+  tag_summary {
+    count
+    tag {
+      uuid
+      label
+      taxonomy {
+        uuid
+        name
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+  __typename
+}`;
+
+/**
+ * Creates a plain search request, with its only constraint being the search
+ * term. Splice's own app sends the term as both the general query and the file
+ * path filter, so this does too.
  */
 export function createSearchRequest(query: string): SpliceSearchRequest {
+  const term = query.trim().length == 0 ? undefined : query;
+
   return {
     operationName: "SamplesSearch",
-    query: 'query SamplesSearch($asset_status_slug: AssetStatusSlug, $page: Int, $order: SortOrder = DESC, $limit: Int = 50, $sort: AssetSortType = relevance, $parent_asset_uuid: GUID, $parent_asset_type: AssetTypeSlug, $query: String, $tags: [ID!], $tags_exclude: [ID!], $attributes: [AssetAttributeSlug!], $key: String, $chord_type: String, $min_bpm: Int, $max_bpm: Int, $bpm: String, $liked: Boolean, $licensed: Boolean, $filepath: String, $asset_category_slug: AssetCategorySlug, $random_seed: String, $coso_seed: CosoSeedInput, $ac_uuid: String, $legacy: Boolean) {\n  assetsSearch(\n    filter: {legacy: $legacy, published: true, asset_type_slug: sample, asset_status_slug: $asset_status_slug, asset_category_slug: $asset_category_slug, query: $query, tag_ids: $tags, tag_ids_exclude: $tags_exclude, attributes: $attributes, key: $key, chord_type: $chord_type, min_bpm: $min_bpm, max_bpm: $max_bpm, bpm: $bpm, liked: $liked, licensed: $licensed, filepath: $filepath, ac_uuid: $ac_uuid, coso_seed: $coso_seed}\n    children: {parent_asset_uuid: $parent_asset_uuid}\n    pagination: {page: $page, limit: $limit}\n    sort: {sort: $sort, order: $order, random_seed: $random_seed}\n    legacy: {parent_asset_type: $parent_asset_type, use: $legacy}\n  ) {\n    ...assetDetails\n    __typename\n  }\n}\n\nfragment assetDetails on AssetPage {\n  ...assetPageItems\n  ...assetTagSummaries\n  ...assetDeviceSummaries\n  pagination_metadata {\n    currentPage\n    totalPages\n    __typename\n  }\n  response_metadata {\n    next\n    previous\n    records\n    __typename\n  }\n  __typename\n}\n\nfragment assetPageItems on AssetPage {\n  items {\n    ... on IAsset {\n      asset_prices {\n        amount\n        currency\n        __typename\n      }\n      uuid\n      name\n      liked\n      licensed\n      asset_type {\n        label\n        __typename\n      }\n      asset_type_slug\n      tags {\n        uuid\n        label\n        taxonomy {\n          uuid\n          name\n          __typename\n        }\n        __typename\n      }\n      files {\n        name\n        hash\n        path\n        asset_file_type_slug\n        url\n        __typename\n      }\n      __typename\n    }\n    ... on IAssetChild {\n      parents(filter: {asset_type_slug: pack}) {\n        items {\n          __typename\n          ... on PackAsset {\n            uuid\n            name\n            permalink_base_url\n            asset_type_slug\n            files {\n              path\n              asset_file_type_slug\n              url\n              __typename\n            }\n            permalink_slug\n            child_asset_counts {\n              type\n              count\n              __typename\n            }\n            main_genre\n            __typename\n          }\n        }\n        __typename\n      }\n      __typename\n    }\n    ... on SampleAsset {\n      uuid\n      name\n      bpm\n      chord_type\n      duration\n      instrument\n      key\n      asset_category_slug\n      has_similar_sounds\n      has_coso\n      attributes\n      coso_playback_metadata {\n        psOffset\n        numBars\n        playbackBpm\n        __typename\n      }\n      __typename\n    }\n    ... on PresetAsset {\n      uuid\n      name\n      attributes\n      device {\n        name\n        uuid\n        plugin_type\n        minimum_device_version\n        __typename\n      }\n      asset_devices {\n        device {\n          name\n          uuid\n          device_type_slug\n          minimum_device_version\n          __typename\n          ... on PluginDevice {\n            plugin_type\n            __typename\n          }\n        }\n        __typename\n      }\n      __typename\n    }\n    ... on PackAsset {\n      uuid\n      name\n      provider {\n        name\n        created_at\n        __typename\n      }\n      provider_uuid\n      uuid\n      permalink_slug\n      permalink_base_url\n      main_genre\n      __typename\n    }\n    ... on ILegacyAsset {\n      catalog_uuid\n      __typename\n    }\n    __typename\n  }\n  __typename\n}\n\nfragment assetTagSummaries on AssetPage {\n  tag_summary {\n    tag {\n      uuid\n      label\n      taxonomy {\n        uuid\n        name\n        __typename\n      }\n      __typename\n    }\n    count\n    __typename\n  }\n  __typename\n}\n\nfragment assetDeviceSummaries on AssetPage {\n  device_summary {\n    device {\n      uuid\n      name\n      __typename\n    }\n    count\n    __typename\n  }\n  __typename\n}\n',
+    query: SAMPLES_SEARCH,
     variables: {
       attributes: [],
-      filepath: query,
-      legacy: true,
+      query: term,
+      filepath: term,
       limit: 50,
+      page: 1,
       order: "DESC",
-      sort: "relevance",
-      tags: [],
-      tags_exclude: []
+      sort: "popularity",
+      tags: []
     }
   }
 }
@@ -37,23 +171,24 @@ export interface SpliceRequest<T> {
  */
 export interface SpliceSearchRequest extends SpliceRequest<{
   attributes: string[],
+  query?: string,
+  filepath?: string,
   bpm?: string,
   max_bpm?: number,
   min_bpm?: number,
-  filepath: string,
   limit: number,
-  order: "DESC",
+  page: number,
+  order: SortOrder,
   sort: SpliceSortBy,
   random_seed?: string,
-  legacy?: true,
   tags: string[],
-  tags_exclude: string[],
   asset_category_slug?: SpliceSampleType,
-  page?: number,
   key?: MusicKey,
   chord_type?: ChordType,
   parent_asset_uuid?: string,
-  parent_asset_type?: "pack"
+  parent_asset_type?: "pack",
+  liked?: boolean,
+  licensed?: boolean
 }>{}
 
 export type SpliceSearchResponse = {
@@ -85,6 +220,10 @@ export type SpliceSearchResponse = {
 export type SpliceSample = {
   uuid: string,
   name: string,
+
+  /** Splice labels every asset it returns; a sample says so here. */
+  asset_type_slug?: "sample",
+
   tags: SpliceTag[],
   files: SpliceFile[],
   parents: {
@@ -93,7 +232,6 @@ export type SpliceSample = {
   bpm: number | null,
   chord_type: ChordType | null,
   duration: number,
-  instrument: string | null,
   key: MusicKey | null,
   asset_category_slug: "oneshot" | "loop"
 }
@@ -101,7 +239,16 @@ export type SpliceSample = {
 export type SpliceFile = {
   name: string,
   path: string,
+
+  /** Content hash of the file, which also identifies it in its download URL. */
+  hash?: string,
+
   asset_file_type_slug: "preview_mp3" | "waveform",
+
+  /**
+   * A pre-signed URL, valid for a few hours. It's minted per search response,
+   * so it has to be used with the sample it came back with.
+   */
   url: string
 }
 

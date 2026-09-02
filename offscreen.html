@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Splicedd worker</title>
+  </head>
+  <body>
+    <!--
+      An offscreen document is the only extension context that has both blob URLs
+      and the extension APIs: service workers can't call URL.createObjectURL, and
+      chrome.downloads can't read a blob URL minted inside a web page. This
+      document bridges the two. See src/offscreen.ts.
+    -->
+    <script src="offscreen.js"></script>
+  </body>
+</html>

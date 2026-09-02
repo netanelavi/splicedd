@@ -1,0 +1,12 @@
+{
+  "name": "splicedd-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end runs against a mocked splice.com, with the built extension loaded.",
+  "scripts": {
+    "test": "node inject.mjs && node listing.mjs && node site.mjs && node folder.mjs && node tap.mjs && node privacy.mjs && node settings.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}
